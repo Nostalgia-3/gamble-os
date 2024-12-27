@@ -1,0 +1,3 @@
+Enums       Pascal Case (VeryCoolEnum)
+Functions   Snake  Case (my_cool_func)
+Variables   Camel  Case (myCoolVariable)
