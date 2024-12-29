@@ -3,7 +3,23 @@
 
 #include "types.h"
 
-static inline u8 inb(u16 port);
-static inline void outb(u16 port, u8 val);
+static inline u8 inb(u16 port) {
+    u8 ret;
+    __asm__ volatile ( "inb %w1, %b0"
+                   : "=a"(ret)
+                   : "Nd"(port)
+                   : "memory");
+    return ret;
+}
+
+static inline void outb(u16 port, u8 val) {
+    __asm__ volatile ( "outb %b0, %w1" : : "a"(val), "Nd"(port) : "memory");
+}
+
+extern u16 inw(u16 port);
+extern void outw(u16 port, u16 val);
+
+extern u32 inl(u16 port);
+extern void outl(u16 port, u32 val);
 
 #endif

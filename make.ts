@@ -1,75 +1,63 @@
 #!/usr/bin/env -S deno run -A
 
+import { existsSync } from 'node:fs';
+import * as m from './m.ts';
 import path from 'node:path';
 
-function base(s: string) {
-    return path.basename(s);
-}
-
-function ext(s: string, x: string) {
-    return s.replace(path.extname(s), x);
-}
-
-function call(s: string, cont = false) {
-    const secs = s.split(' ')
-    const fn = secs.shift();
-    if(!fn) return;
-    console.log(s);
-    const com = new Deno.Command(fn, { args: secs, stdout: 'inherit', stdin: 'inherit', stderr: 'inherit' });
-    const resp = com.outputSync();
-    if(!resp.success) {
-        Deno.exit(1);
-    }
-    return resp;
-}
-
-function scanDir(p: string, need?: RegExp, ignore?: RegExp): string[] {
-    let fnames: string[] = [];
-    
-    const files = Deno.readDirSync(p);
-    for(const file of files) {
-        if(file.isDirectory) {
-            fnames = fnames.concat(scanDir(path.join(p, file.name), need, ignore));
-        } else {
-            if((ignore && file.name.match(ignore)) || (need && !file.name.match(need))) {
-                continue;
-            }
-            
-            fnames.push(path.join(p, file.name));
-        }
-    }
-
-    return fnames;
-}
+const LD = `ld`;
+const GCC = `gcc`;
 
 const MBR = 'build/mbr.bin';
 const KERNEL = 'build/kernel.bin';
 const BOOT = 'build/os.bin';
 const LINKER_SCRIPT = 'linker.ld';
 
+const BIN_SIZE = 4194304;
+// const BIN_SIZE = 512*20;
+
 const INCLUDE = 'include';
 
-const assemblyFiles: string[] = scanDir('src/', /\.asm$/, /^s\_/).sort((a,b)=>a.charCodeAt(0)-b.charCodeAt(0));
-const cFiles: string[] = scanDir('src/', /\.c$/);
+if(Deno.args[0] == 'listen') {
+    m.startExServer();
+} else {
+    if(!existsSync('build')) {
+        Deno.mkdirSync('build');
+    }
+    
+    const assemblyFiles: string[] = m.scanDir('src/', /\.asm$/, /^s\_/).sort((a,b)=>a.charCodeAt(0)-b.charCodeAt(0));
+    const cFiles: string[] = m.scanDir('src/', /\.c$/);
+    
+    // hardcode the MBR because it's like one file
+    m.call(`nasm src/boot/s_main.asm -fbin -o ${MBR}`);
+    
+    for(const asm of assemblyFiles)
+        m.call(`nasm ${asm} -felf -o build/${m.ext(m.base(asm), '.asm.o')}`);
+    
+    for(const c of cFiles)
+        m.call(`${GCC} -I ${INCLUDE} -O1 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
 
-// hardcode the MBR because it's like one file
-call(`nasm src/boot/s_main.asm -fbin -o ${MBR}`);
+    const files: string[] = [];
 
-for(const asm of assemblyFiles)
-    call(`nasm ${asm} -felf -o build/${ext(base(asm), '.o')}`);
+    for(const file of assemblyFiles.map((v)=>path.join('build/', m.ext(m.base(v), '.asm.o')))) {
+        files.push(file);
+    }
 
-for(const c of cFiles)
-    call(`gcc -I ${INCLUDE} -m32 -o build/${ext(base(c), '.o')} -fno-pie -ffreestanding -c ${c}`);
+    for(const file of cFiles.map((v)=>path.join('build/', m.ext(m.base(v), '.c.o')))) {
+        files.push(file);
+    }
 
-call(`ld -m elf_i386 -T ${LINKER_SCRIPT} -o ${KERNEL} -Ttext 0x1000 --oformat binary ${assemblyFiles.concat(cFiles).map((v)=>path.join('build/', ext(base(v), '.o'))).join(' ')}`);
+    m.call(`${LD} -m elf_i386 -T ${LINKER_SCRIPT} -o ${KERNEL} -Ttext 0x1000 --oformat binary ${files.join(' ')}`);
+    
+    const fMBR = Deno.readFileSync(MBR);
+    const fKERNEL = Deno.readFileSync(KERNEL);
+    
+    console.log(`kernel size: ${fMBR.length+fKERNEL.length} bytes (bytes remaining: ${BIN_SIZE - fMBR.length - fKERNEL.length})`);
 
-const fMBR = Deno.readFileSync(MBR);
-const fKERNEL = Deno.readFileSync(KERNEL);
+    const fBOOT = new Uint8Array(BIN_SIZE); // 4MiB
+    fBOOT.set(fMBR);
+    fBOOT.set(fKERNEL, fMBR.length);
+    
+    Deno.writeFileSync(BOOT, fBOOT);
 
-const fBOOT = new Uint8Array(fMBR.length + fKERNEL.length);
-fBOOT.set(fMBR);
-fBOOT.set(fKERNEL, fMBR.length);
-
-Deno.writeFileSync(BOOT, fBOOT);
-
-call(`qemu-system-i386 -drive file=${BOOT},format=raw,index=0,media=disk -m 512M`);
+    m.exCall(`qemu-system-i386 -drive file=${BOOT},format=raw,index=0,media=disk -drive file=disk.img,format=raw,index=1,media=disk -m 512M -monitor stdio -audio sdl,model=sb16`, '172.25.112.1');
+}

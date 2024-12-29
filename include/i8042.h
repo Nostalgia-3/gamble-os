@@ -11,26 +11,34 @@
 
 #include "types.h"
 
-#define I8042_DATA_PORT 0x60
-#define I8042_STAT_REG  0x64
-#define I8042_COMM_REG  0x64
+#define CON_SYSTEM_RESET    1
+#define CON_A20_GATE        2
+#define CON_SECOND_PS2_CLK  4
+#define CON_SECOND_PS2_DATA 8
+// Output buffer full with byte from first PS/2 port (connected to IRQ1)
+#define CON_OUT_BUFF_PS2_1  16
+// 	Output buffer full with byte from second PS/2 port (connected to IRQ12, only if 2 PS/2 ports supported)
+#define CON_OUT_BUFF_PS2_2  32
+#define CON_FIRST_PS2_CLK   64
+#define CON_FIRST_PS2_DATA  128
+
 
 // This isn't all of them but I
 // basically just cherry picked
 // the ones I care about
 enum I8042Commands {
-    READ_B0             = 0x20,
-    DISABLE_SECOND_PS2  = 0xA7,
-    ENABLE_SECOND_PS2   = 0xA8,
-    TEST_SECOND_PS2     = 0xA9,
-    TEST_PS2_CONTROLLER = 0xAA,
-    TEST_FIRST_PS2      = 0xAB,
-    DISABLE_FIRST_PS2   = 0xAD,
-    ENABLE_FIRST_PS2    = 0xAE,
-    READ_CONTROLLER_OUT = 0xD0,
-    WRITE_CONTROLLER_OUT= 0xD1,
-    WRITE_TO_SECOND_PS2 = 0xD4,
-    RESET_CPU           = 0xFE
+    COM_READ_B0             = 0x20,
+    COM_DISABLE_SECOND_PS2  = 0xA7,
+    COM_ENABLE_SECOND_PS2   = 0xA8,
+    COM_TEST_SECOND_PS2     = 0xA9,
+    COM_TEST_PS2_CONTROLLER = 0xAA,
+    COM_TEST_FIRST_PS2      = 0xAB,
+    COM_DISABLE_FIRST_PS2   = 0xAD,
+    COM_ENABLE_FIRST_PS2    = 0xAE,
+    COM_READ_CONTROLLER_OUT = 0xD0,
+    COM_WRITE_CONTROLLER_OUT= 0xD1,
+    COM_WRITE_TO_SECOND_PS2 = 0xD4,
+    COM_RESET_CPU           = 0xFE
 };
 
 typedef struct _I8042_Status {
@@ -56,12 +64,14 @@ typedef struct _I8042_Config {
 } I8042_Config;
 
 
-I8042_Status    I8042_get_status();
+I8042_Status    i8042_get_status();
 
-void            I8042_set_config(I8042_Config config);
-I8042_Config    I8042_get_config();
+void            i8042_set_config(I8042_Config config);
+I8042_Config    i8042_get_config();
 
-void            I8042_send_controller_byte(u8 byte);
-u8              I8042_get_controller_byte();
+void            i8042_send_controller_byte(u8 byte);
+
+void            i8042_send_byte(u8 byte);
+u8              i8042_get_byte();
 
 #endif
