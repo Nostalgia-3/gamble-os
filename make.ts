@@ -59,5 +59,9 @@ if(Deno.args[0] == 'listen') {
     
     Deno.writeFileSync(BOOT, fBOOT);
 
+    if(!existsSync('disk.img')) {
+        m.call(`qemu-img create disk.img 512M -o raw`);
+    }
+
     m.exCall(`qemu-system-i386 -drive file=${BOOT},format=raw,index=0,media=disk -drive file=disk.img,format=raw,index=1,media=disk -m 512M -monitor stdio -audio sdl,model=sb16`, '172.25.112.1');
 }
