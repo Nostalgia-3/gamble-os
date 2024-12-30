@@ -9,7 +9,6 @@
 #ifndef GOSH_H
 #define GOSH_H
 
-#include "driver.h"
 #include "types.h"
 
 /******************************* Documentation *********************************
@@ -17,7 +16,7 @@
 [Devices]
 
 BRIEF:
-    Devices is the way GaOS obfuscates actual hardware. There are predefined
+    Devices are the way GaOS abstracts actual hardware. There are predefined
 functions for interacting with specific types of Devices, meaning no user
 program should have to interact directly with the majority of hardware.
 
@@ -33,9 +32,39 @@ global device list, accessible through `get_device()`. Most devices have
 functions that are called by both the kernel and users. An example is the
 Keyboard's `read_fifo()`, which contains scancodes
 
+[Global Device Table]
+
+BRIEF:
+    The gdevt is a list of connected devices, as well as drivers.
+
+DRIVERS:
+    The actual implmentation of the gdevt shouldn't matter too much, as
+    `k_add_dev()`
+
+[Driver]
+
+BRIEF:
+    Drivers, in GaOS, are modules that abstract hardware.
+
 *******************************************************************************/
 
-/* Generic enums & types */
+typedef struct _Driver {
+    // The interrupts the driver listens to
+    u32 r_active_ints[8];
+    // The identifier of the driver (used for creating devices)
+    size_t r_id;
+    // The ids of the devices owned by the driver
+    u32 r_devices[8];
+    
+    // Called when the driver is created (the system starts, in most cases)
+    void (*DriverEntry)(u32 driver_id);
+    // Called when a registered interrupt is called
+    void (*DriverInt)(u32 driver_id, u8 i);
+    // Called when the driver is destroyed (the system closes, in most cases)
+    void (*DriverEnd)();
+} Driver;
+
+#define LOOPBACK_KEYBOARD_DEVICE 0
 
 enum Key {
     K_None, K_Back, K_Tab, K_Enter, K_Return, K_CapsLock, K_Escape, K_Space,
@@ -58,8 +87,8 @@ enum DeviceType {
 
 typedef struct _Device {
     /* The generic type of device */
-    DeviceType type;
-    /* The code given to the device (used) */
+    enum DeviceType type;
+    /* The code given to the device */
     u32 code;
     /* The unique ID of the device, given by the kernel */
     u32 id;
@@ -68,15 +97,23 @@ typedef struct _Device {
 } Device;
 
 typedef struct _KeyboardDeviceData {
-    void (*get_key_status)(Key status);
+    // Get the held state of a key
+    bool (*get_key_status)(enum Key status);
+    // Read a scancode from the FIFO
+    u8 (*read_fifo)();
 } KeyboardDeviceData;
 
-#define LOOPBACK_KEYBOARD_DEVICE 0
+// Load a driver into the system
+void load_driver(Driver* driver);
 
-/* Writes the C string pointed by format to stdout */
-__attribute__ ((format (printf, 1, 2))) int printf (const char* format, ...);
+// Unload a driver from the system (NULL is passable)
+void unload_driver(Driver *driver);
+
+// Add a device to the global device table, where the id is either
+// a process id, or a driver id, then returning a pointer to the device
+Device* k_add_dev(u32 id, enum DeviceType type, u32 code);
 
 /* Cause a kernel panic, halting all operations on the CPU */
-void kpanic(const char* st);
+void kpanic();
 
 #endif

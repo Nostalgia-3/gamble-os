@@ -11,7 +11,7 @@ extern void* isr_stub_table[];
 
 void exception_handler(void) {
     __asm__ volatile (
-        "cli; hlt"
+        "cli; hlt":
     ); // Completely hangs the computer
 }
 
