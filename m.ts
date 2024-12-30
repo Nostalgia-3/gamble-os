@@ -1,6 +1,5 @@
 // @ts-types="npm:@types/ws"
 import { WebSocketServer } from 'npm:ws';
-import { existsSync } from 'node:fs';
 import p from 'node:path';
 
 /**
@@ -100,24 +99,29 @@ export function startExServer(port: number = 8086) {
  * @param ip the ip (default is 127.0.0.1) of the external server
  * @param port the port (default is 8086) of the external server
  */
-export function exCall(s: string, ip: string = '127.0.0.1', port = 8086) {
-    const ws = new WebSocket(`ws://${ip}:${port}`);
-
-    ws.addEventListener('open', () => {
-        console.log(`\x1b[90m[\x1b[34m%\x1b[90m]\x1b[0m ${s}`);
-        ws.send(`r::${s}`);
-        ws.close();
-    });
-
-    ws.addEventListener('message', (ev) => {
-        console.log(ev.data);
-        if(ev.data != 0) {
-            console.log(`\x1b[90m[\x1b[31m%\x1b[90m]\x1b[0m Failure`);
-        }
-    })
-
-    ws.addEventListener('error', (ev) => {
-        console.log((ev as ErrorEvent).message);
-        Deno.exit(1);
-    });
+export function exCall(s: string, ip?: string, port = 8086) {
+    try {
+        const ws = new WebSocket(`ws://${ip ?? '127.0.0.1'}:${port}`);
+        
+        ws.addEventListener('open', () => {
+            console.log(`\x1b[90m[\x1b[34m>\x1b[90m]\x1b[0m ${s}`);
+            ws.send(`r::${s}`);
+            ws.close();
+        });
+    
+        ws.addEventListener('message', (ev) => {
+            console.log(ev.data);
+            if(ev.data != 0) {
+                console.log(`\x1b[90m[\x1b[31m%\x1b[90m]\x1b[0m Failure`);
+            }
+        })
+    
+        ws.addEventListener('error', (ev) => {
+            console.log((ev as ErrorEvent).message);
+            Deno.exit(1);
+        });
+    } catch (e) {
+        console.error(`\x1b[90m[\x1b[31m%\x1b[90m]\x1b[0m Failed to send`);
+        console.error(e);
+    }
 }

@@ -12,8 +12,8 @@ const KERNEL = 'build/kernel.bin';
 const BOOT = 'build/os.bin';
 const LINKER_SCRIPT = 'linker.ld';
 
-const BIN_SIZE = 4194304;
-// const BIN_SIZE = 512*20;
+// const BIN_SIZE = 1048576;
+const BIN_SIZE = 524288; // 512KiB
 
 const INCLUDE = 'include';
 
@@ -46,12 +46,12 @@ if(Deno.args[0] == 'listen') {
         files.push(file);
     }
 
-    m.call(`${LD} -m elf_i386 -T ${LINKER_SCRIPT} -o ${KERNEL} -Ttext 0x1000 --oformat binary ${files.join(' ')}`);
+    m.call(`${LD} -m elf_i386 -T ${LINKER_SCRIPT} -o ${KERNEL} --oformat binary ${files.join(' ')}`);
     
     const fMBR = Deno.readFileSync(MBR);
     const fKERNEL = Deno.readFileSync(KERNEL);
     
-    console.log(`kernel size: ${fMBR.length+fKERNEL.length} bytes (bytes remaining: ${BIN_SIZE - fMBR.length - fKERNEL.length})`);
+    console.log(`kernel size: ${fKERNEL.length} bytes (bytes remaining: ${BIN_SIZE - fMBR.length - fKERNEL.length})`);
 
     const fBOOT = new Uint8Array(BIN_SIZE); // 4MiB
     fBOOT.set(fMBR);
@@ -64,6 +64,6 @@ if(Deno.args[0] == 'listen') {
         m.call(`qemu-img create disk.img 512M`);
     }
 
-    // '172.25.112.1' (leaving this here)
-    m.exCall(`qemu-system-i386 -drive file=${BOOT},format=raw,index=0,media=disk -drive file=disk.img,format=raw,index=1,media=disk -m 512M -monitor stdio -audio sdl,model=sb16`, Deno.args[1]);
+    // '172.25.112.1' (leaving this here) Deno.args[1]
+    m.exCall(`qemu-system-i386 -drive file=${BOOT},format=raw,index=0,media=disk -drive file=disk.img,format=raw,index=1,media=disk -m 512M -monitor stdio -audio sdl,model=sb16`, Deno.args[0]);
 }

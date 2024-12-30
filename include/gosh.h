@@ -48,23 +48,8 @@ BRIEF:
 
 *******************************************************************************/
 
-typedef struct _Driver {
-    // The interrupts the driver listens to
-    u32 r_active_ints[8];
-    // The identifier of the driver (used for creating devices)
-    size_t r_id;
-    // The ids of the devices owned by the driver
-    u32 r_devices[8];
-    
-    // Called when the driver is created (the system starts, in most cases)
-    void (*DriverEntry)(u32 driver_id);
-    // Called when a registered interrupt is called
-    void (*DriverInt)(u32 driver_id, u8 i);
-    // Called when the driver is destroyed (the system closes, in most cases)
-    void (*DriverEnd)();
-} Driver;
-
-#define LOOPBACK_KEYBOARD_DEVICE 0
+#define KERNEL_ID 7685
+#define LOOPBACK_KEYBOARD_DEVICE 1
 
 enum Key {
     K_None, K_Back, K_Tab, K_Enter, K_Return, K_CapsLock, K_Escape, K_Space,
@@ -82,7 +67,8 @@ enum DeviceType {
     DEV_MOUSE,
     DEV_NETWORK,
     DEV_AUDIO,
-    DEV_TERMINAL
+    DEV_TERMINAL,
+    DEV_DRIVER
 };
 
 typedef struct _Device {
@@ -92,9 +78,28 @@ typedef struct _Device {
     u32 code;
     /* The unique ID of the device, given by the kernel */
     u32 id;
+    /* The owner ID of the device */
+    u32 owner;
 
     void* data;
 } Device;
+
+typedef struct _Driver Driver;
+
+typedef struct _Driver {
+    // The interrupts the driver listens to
+    u32 r_active_ints[8];
+    // The identifier of the driver (used for creating devices)
+    size_t r_id;
+    
+    // Called when the driver is created (the system starts, in most cases).
+    // The device passed is the driver psuedo-device
+    void (*DriverEntry)(Device *dev);
+    // Called when a registered interrupt is called
+    void (*DriverInt)(Device *dev, u8 int_id);
+    // Called when the driver is destroyed (the system closes, in most cases)
+    void (*DriverEnd)();
+} Driver;
 
 typedef struct _KeyboardDeviceData {
     // Get the held state of a key
@@ -106,12 +111,34 @@ typedef struct _KeyboardDeviceData {
 // Load a driver into the system
 void load_driver(Driver* driver);
 
-// Unload a driver from the system (NULL is passable)
+// Unload a driver from the system
 void unload_driver(Driver *driver);
 
 // Add a device to the global device table, where the id is either
 // a process id, or a driver id, then returning a pointer to the device
-Device* k_add_dev(u32 id, enum DeviceType type, u32 code);
+Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code);
+
+// Register an int to a device
+bool k_register_int(Driver *driver, u8 int_id);
+
+// Get a device by querying the owner and type
+Device* k_get_device_by_owner(u32 owner, enum DeviceType type);
+
+// Initialize the global device table. Don't call this unless you know what
+// you're doing.
+void _init_gdevt();
+
+// Get the global device table.
+Device* get_gdevt();
+
+// Get the total number of devices (used and unused) in the global device table.
+u32 get_gdevt_len();
+
+// Get the total number of used devices in the global device table.
+u32 get_used_devices();
+
+// Get a character from stdin
+u8  getc();
 
 /* Cause a kernel panic, halting all operations on the CPU */
 void kpanic();

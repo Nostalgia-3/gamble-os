@@ -3,25 +3,44 @@
 #include "int.h"
 #include "types.h"
 
-__attribute__((aligned(0x10))) static idt_entry idt[256];
+__attribute__((aligned(0x10))) static idt_entry_t idt[IDT_MAX_DESCRIPTORS];
 static idtr_t idtr;
 static bool vectors[IDT_MAX_DESCRIPTORS];
 
 extern void* isr_stub_table[];
 
-void exception_handler(void) {
+#include <str.h>
+#include <vga.h>
+void exception_handler(u8 d) {
+    puts("Exception #");
+    puts(itoa(d, 10));
+    puts(" called\n");
+    if(d == 13) {
+
+    }
     __asm__ volatile (
-        "cli; hlt":
+        "cli\n hlt":
     ); // Completely hangs the computer
+    while(1); // <-- this is to make the compiler shut up
 }
 
-void idt_init(void) {
-    idtr.base = (size_t)&idt[0];
-    idtr.limit = (u16)sizeof(idt_entry) * IDT_MAX_DESCRIPTORS - 1;
+static bool vectors[IDT_MAX_DESCRIPTORS];
+
+extern void* isr_stub_table[];
+extern void* irq_handle_table[16];
+
+void idt_init() {
+    idtr.base = (u32)&idt[0];
+    idtr.limit = (u16)sizeof(idt_entry_t) * IDT_MAX_DESCRIPTORS - 1;
 
     for (u8 vector = 0; vector < 32; vector++) {
         idt_set_descriptor(vector, isr_stub_table[vector], 0x8E);
         vectors[vector] = TRUE;
+    }
+
+    for(u8 vector = 0; vector < 16; vector++) {
+        idt_set_descriptor(vector+0x20, irq_handle_table[vector], 0x8E);
+        vectors[vector + 0x20] = TRUE;
     }
 
     __asm__ volatile ("lidt %0" : : "m"(idtr)); // load the new IDT
@@ -29,11 +48,11 @@ void idt_init(void) {
 }
 
 void idt_set_descriptor(u8 vector, void* isr, u8 flags) {
-    idt_entry* descriptor = &idt[vector];
+    idt_entry_t* descriptor = &idt[vector];
 
-    descriptor->offset1         = (u32)isr & 0xFFFF;
-    descriptor->segment         = 0x08; // this value can be whatever offset your kernel code selector is in your GDT
-    descriptor->flags           = flags;
-    descriptor->offset2         = (u32)isr >> 16;
-    descriptor->reserved        = 0;
+    descriptor->isr_low        = (u32)isr & 0xFFFF;
+    descriptor->kernel_cs      = 0x08; // this value can be whatever offset your kernel code selector is in your GDT
+    descriptor->attributes     = flags;
+    descriptor->isr_high       = (u32)isr >> 16;
+    descriptor->reserved       = 0;
 }
