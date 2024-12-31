@@ -92,6 +92,7 @@ typedef struct _Driver {
     u8 r_active_ints[32];
     // The identifier of the driver (used for creating devices)
     size_t r_id;
+    void *data;
     
     // Called when the driver is created (the system starts, in most cases).
     // The device passed is the driver psuedo-device
@@ -104,9 +105,11 @@ typedef struct _Driver {
 
 typedef struct _KeyboardDeviceData {
     // Get the held state of a key
-    bool (*get_key_status)(enum Key status);
-    // Read a scancode from the FIFO
-    u8 (*read_fifo)();
+    bool key_statuses[sizeof(enum Key)];
+    // Read an ascii character from the FIFO, or zero if there have been
+    // no keys pressed
+    u8 fifo[32];
+    u8 fifo_ind;
 } KeyboardDeviceData;
 
 // Load a driver into the system
@@ -140,7 +143,10 @@ u32 get_gdevt_len();
 // Get the total number of used devices in the global device table.
 u32 get_used_devices();
 
-// Get a character from stdin
+// Halt the process until a character from the keyboard is detected
+u8  scanc();
+
+// Get the latest ascii key pressed, or 0 if there was no key
 u8  getc();
 
 /* Cause a kernel panic, halting all operations on the CPU */

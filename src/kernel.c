@@ -107,41 +107,39 @@ void _start(u8 boot, u32 mem) {
     idt_init();
     load_driver((Driver*)&DriverI8042);
 
-    clear(' ', norm);
-    set_cursor(0, 0);
-    for(u16 i=0;i<mem;i++) {
-        struct MemoryEntry* e = (struct MemoryEntry*)(0x7E00);
-        puts("0x");
-        padputs(itoa(e[i].base2, 16), 8, '0');
-        padputs(itoa(e[i].base1, 16), 8, '0');
-        puts(" | ");
-        puts("0x");
-        padputs(itoa(e[i].len2, 16), 8, '0');
-        padputs(itoa(e[i].len1, 16), 8, '0');
-        puts(" | ");
-        puts(itoa(e[i].type, 10));
-        putc('\n');
+    puts("PCI Devices:\n");
+    PCIHeader header;
+    for(int x=0;x<256;x++) {
+        for(int i=0;i<32;i++) {
+            if(pci_get_vendor(x, i) == 0xFFFF) continue;
+            header = pci_get_header(x, i);
+            putc(' ');
+            puts(itoa(header.vendor, 16));
+            putc(':');
+            puts(itoa(header.device, 16));
+            puts(" (");
+            if(header.class_code <= 0x14) puts((char*)class_codes[header.class_code]);
+            else puts("Unknown\n");
+            puts(")\n");
+        }
     }
+
+    // for(u16 i=0;i<mem;i++) {
+    //     struct MemoryEntry* e = (struct MemoryEntry*)(0x7E00);
+    //     puts("0x");
+    //     padputs(itoa(e[i].base2, 16), 8, '0');
+    //     padputs(itoa(e[i].base1, 16), 8, '0');
+    //     puts(" | ");
+    //     puts("0x");
+    //     padputs(itoa(e[i].len2, 16), 8, '0');
+    //     padputs(itoa(e[i].len1, 16), 8, '0');
+    //     puts(" | ");
+    //     puts(itoa(e[i].type, 10));
+    //     putc('\n');
+    // }
 
     draw_status();
     while(1);
-
-    // puts("PCI Devices:\n");
-    // PCIHeader header;
-    // for(int x=0;x<256;x++) {
-    //     for(int i=0;i<32;i++) {
-    //         if(pci_get_vendor(x, i) == 0xFFFF) continue;
-    //         header = pci_get_header(x, i);
-    //         putc(' ');
-    //         puts(itoa(header.vendor, 16));
-    //         putc(':');
-    //         puts(itoa(header.device, 16));
-    //         puts(" (");
-    //         if(header.class_code <= 0x14) puts((char*)class_codes[header.class_code]);
-    //         else puts("Unknown\n");
-    //         puts(")\n");
-    //     }
-    // }
 
     // u8 text_buf[80];
     // u8 index = 0;

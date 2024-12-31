@@ -38,6 +38,7 @@ enum I8042Commands {
     COM_READ_CONTROLLER_OUT = 0xD0,
     COM_WRITE_CONTROLLER_OUT= 0xD1,
     COM_WRITE_TO_SECOND_PS2 = 0xD4,
+    COM_WRITE_CONFIG        = 0x60,
     COM_RESET_CPU           = 0xFE
 };
 
@@ -69,7 +70,7 @@ I8042_Status    i8042_get_status();
 void            i8042_set_config(I8042_Config config);
 I8042_Config    i8042_get_config();
 
-void            i8042_send_controller_byte(u8 byte);
+void            i8042_send_cont_comm(u8 byte);
 
 void            i8042_send_byte(u8 byte);
 u8              i8042_get_byte();

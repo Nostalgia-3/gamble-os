@@ -85,18 +85,6 @@ switch_to_32bit:
 BOOT_DRIVE: db 0
 NUM_MEMORY: dd 0
 
-DAPACK:
-    db 0x10
-    db 0
-blocks:
-    dw 0x25 ; this is set by int 13h
-db_add:
-    dw KERNEL_OFFSET
-    dw 0
-d_lba:
-    dd 1
-    dd 0
-
 do_e820:
     mov di, 0x7E00          ; Set di to 0x8004. Otherwise this code will get stuck in `int 0x15` after some entries are fetched 
     xor ebx, ebx            ; ebx must be 0 to start

@@ -14,6 +14,10 @@ void _init_gdevt() {
     gdevt = k_malloc(sizeof(Device)*256);
     gdevt_len = 256;
     memset(gdevt, 0, sizeof(Device)*256);
+    
+    // create generic keyboard for
+    // getc/scanc
+    k_add_dev(KERNEL_ID, DEV_KEYBOARD, 0);
 }
 
 Device* get_gdevt() {
@@ -123,6 +127,20 @@ void k_handle_int(u8 int_id) {
                 ((Driver*)gdevt->data)->DriverInt(&gdevt[i], int_id);
         }
     }
+}
+
+// Halt the process until a character from the keyboard is detected
+u8 scanc() {
+
+}
+
+// Get the latest ascii key pressed, or 0 if there was no key
+u8 getc() {
+    Device* dev = k_get_device_by_owner(KERNEL_ID, DEV_KEYBOARD);
+    if(dev == NULL) return 0;
+
+    KeyboardDeviceData* data = (KeyboardDeviceData*) dev->data;
+    u8 k = data->fifo[0];
 }
 
 void kpanic() {
