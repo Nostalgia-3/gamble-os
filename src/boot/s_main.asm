@@ -18,16 +18,51 @@ reset:
     call PrintDecimal
 
     call load_kernel
+    call load_mem_map
     call switch_to_32bit
 
     jmp $
 
 partition_offset db 0
 BOOT_DRIVE db 0
+NUM_MEMORY dw 0
+
+load_mem_map:
+    push WORD 0
+    mov di,     0x7E00
+    mov eax,    0xE820     ; magic number #1
+    mov ebx,    0
+    mov ecx,    24
+    mov edx,    0x534D4150 ; magic number #2
+    int 0x15
+    jc .finished
+    cmp ebx, 0
+    je .finished
+.inc_num_mem:
+    pop ax
+    inc ax
+    push ax
+.inc_di:
+    push ax
+    push cx
+    mov ax, di
+    and cx, 0xFF
+    add ax, cx
+    mov di, ax
+    pop cx
+    pop ax
+.loop:
+    mov eax,    0xE820
+    mov ecx,    24
+    jmp load_mem_map
+.finished:
+    pop ax
+    mov [NUM_MEMORY], ax
+    ret
 
 load_kernel:
     mov bx, KERNEL_OFFSET
-    mov dh, 25 ; allocate ~12.5KiB
+    mov dh, 45 ; allocate ~12.5KiB
     mov dl, 0x80 ; [BOOT_DRIVE]
     call disk_load
     ret
@@ -65,6 +100,7 @@ sectors_error:
     and ax, 0xFF
     mov bx, ax
     call PrintDecimal
+    pop bx
     pop ax
 
     jmp disk_loop
@@ -170,10 +206,10 @@ init_32bit:
     mov ebp, 0x90000
     mov esp, ebp
 
-    call BEGIN_32BIT
-
-[bits 32]
 BEGIN_32BIT:
+    mov dx, [BOOT_DRIVE]
+    mov ecx, [NUM_MEMORY]
+
     call KERNEL_OFFSET
     jmp $
 

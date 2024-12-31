@@ -9,6 +9,7 @@
 #ifndef I8042_H
 #define I8042_H
 
+#include <gosh.h>
 #include "types.h"
 
 #define CON_SYSTEM_RESET    1
@@ -21,7 +22,6 @@
 #define CON_OUT_BUFF_PS2_2  32
 #define CON_FIRST_PS2_CLK   64
 #define CON_FIRST_PS2_DATA  128
-
 
 // This isn't all of them but I
 // basically just cherry picked
@@ -73,5 +73,8 @@ void            i8042_send_controller_byte(u8 byte);
 
 void            i8042_send_byte(u8 byte);
 u8              i8042_get_byte();
+
+void I8042_DriverEntry(Device *dev);
+void I8042_DriverInt(Device *dev, u8 int_id);
 
 #endif

@@ -25,12 +25,13 @@ irq_handler_%+%1:
     cld
     push DWORD %1
     call irq_handler
+    add esp, 4
+    mov ah, %1
     mov al, 0x20
-    ; mov ah, %1
-    ; cmp ah, 8
-;     jl .pic1
-; .pic2:
-;     out 0xA0, al
+    cmp ah, 8
+    jl .pic1
+.pic2:
+    out 0xA0, al
 .pic1:
     out 0x20, al
     popad

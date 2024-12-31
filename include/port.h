@@ -16,6 +16,10 @@ static inline void outb(u16 port, u8 val) {
     __asm__ volatile ( "outb %b0, %w1" : : "a"(val), "Nd"(port) : "memory");
 }
 
+static inline void io_wait(void) {
+    outb(0x80, 0);
+}
+
 extern u16 inw(u16 port);
 extern void outw(u16 port, u16 val);
 

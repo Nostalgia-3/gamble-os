@@ -2,6 +2,7 @@
 #include <memory.h>
 #include <str.h>
 #include <vga.h>
+#include <math.h>
 
 Device* gdevt;
 u32 gdevt_len = 0;
@@ -100,6 +101,28 @@ Device* k_get_device_by_owner(u32 owner, enum DeviceType type) {
     }
 
     return NULL;
+}
+
+bool k_register_int(Driver *driver, u8 int_id) {
+    if(driver == NULL) return FALSE;
+
+    driver->r_active_ints[(u8)(int_id/8)] |= (1 << (int_id%8));
+
+    return TRUE;
+}
+
+void k_handle_int(u8 int_id) {
+    u16 ind = int_id/8;
+    u16 bit = int_id % 8;
+
+    for(u32 i=0;i<gdevt_len;i++) {
+        if(gdevt[i].type == DEV_DRIVER) {
+            u8 j = ((Driver*)gdevt[i].data)->r_active_ints[ind];
+
+            if(j & (1<<bit) && ((Driver*)gdevt->data)->DriverInt != NULL)
+                ((Driver*)gdevt->data)->DriverInt(&gdevt[i], int_id);
+        }
+    }
 }
 
 void kpanic() {

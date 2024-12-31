@@ -68,6 +68,7 @@ enum DeviceType {
     DEV_NETWORK,
     DEV_AUDIO,
     DEV_TERMINAL,
+    DEV_DRIVE,
     DEV_DRIVER
 };
 
@@ -87,8 +88,8 @@ typedef struct _Device {
 typedef struct _Driver Driver;
 
 typedef struct _Driver {
-    // The interrupts the driver listens to
-    u32 r_active_ints[8];
+    // The irqs the driver listens to
+    u8 r_active_ints[32];
     // The identifier of the driver (used for creating devices)
     size_t r_id;
     
@@ -117,6 +118,8 @@ void unload_driver(Driver *driver);
 // Add a device to the global device table, where the id is either
 // a process id, or a driver id, then returning a pointer to the device
 Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code);
+
+void k_handle_int(u8 irq);
 
 // Register an int to a device
 bool k_register_int(Driver *driver, u8 int_id);
