@@ -84,19 +84,44 @@ struct MemoryEntry {
     u32 exattr;
 };
 
-void _start(u8 boot, u16 mem) {
+void padputs(char*st, u8 length, u8 c) {
+    if(strlen(st) > length) {
+        puts(st);
+    } else {
+        for(int i=0;i<length-strlen(st);i++)
+            putc(c);
+        puts(st);
+    }
+}
+
+void _start(u8 boot, u32 mem) {
     TextAttribute norm;
     norm.bg = VGA_BLACK;
     norm.fg = VGA_WHITE;
     clear(' ', norm);
     set_cursor(0, 0);
 
-    puts(itoa(mem, 10));
+    k_malloc(mem*sizeof(struct MemoryEntry));
 
     _init_gdevt();
     idt_init();
     load_driver((Driver*)&DriverI8042);
 
+    clear(' ', norm);
+    set_cursor(0, 0);
+    for(u16 i=0;i<mem;i++) {
+        struct MemoryEntry* e = (struct MemoryEntry*)(0x7E00);
+        puts("0x");
+        padputs(itoa(e[i].base2, 16), 8, '0');
+        padputs(itoa(e[i].base1, 16), 8, '0');
+        puts(" | ");
+        puts("0x");
+        padputs(itoa(e[i].len2, 16), 8, '0');
+        padputs(itoa(e[i].len1, 16), 8, '0');
+        puts(" | ");
+        puts(itoa(e[i].type, 10));
+        putc('\n');
+    }
 
     draw_status();
     while(1);
