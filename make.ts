@@ -23,9 +23,21 @@ if(Deno.args[0] == 'listen') {
     if(!existsSync('build')) {
         Deno.mkdirSync('build');
     }
+
+    if(!existsSync('make.json')) {
+        Deno.writeTextFileSync('make.json', JSON.stringify({
+            build_index: 0
+        }));
+    }
+
+    let { build_index }: {
+        build_index: number
+    } = JSON.parse(Deno.readTextFileSync('make.json'));
     
     const assemblyFiles: string[] = m.scanDir('src/', /\.asm$/, /^s\_/).sort((a,b)=>a.charCodeAt(0)-b.charCodeAt(0));
     const cFiles: string[] = m.scanDir('src/', /\.c$/);
+
+    console.log(`[BUILD INDEX] ${build_index}`);
     
     // hardcode the MBR because it's like one file
     m.call(`nasm src/boot/s_main.asm -fbin -o ${MBR}`);
@@ -33,8 +45,13 @@ if(Deno.args[0] == 'listen') {
     for(const asm of assemblyFiles)
         m.call(`nasm ${asm} -felf -o build/${m.ext(m.base(asm), '.asm.o')}`);
     
-    for(const c of cFiles)
+    for(const c of cFiles) {
+        Deno.writeTextFileSync(
+            c,
+            Deno.readTextFileSync(c).replaceAll('<MAKE::BUILD_INDEX>', build_index.toString())
+        );
         m.call(`${GCC} -I ${INCLUDE} -O1 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
+    }
 
     const files: string[] = [];
 
@@ -58,6 +75,13 @@ if(Deno.args[0] == 'listen') {
     fBOOT.set(fKERNEL, fMBR.length);
     
     Deno.writeFileSync(BOOT, fBOOT);
+
+    build_index++;
+
+    // update the .make.json
+    Deno.writeTextFileSync('make.json', JSON.stringify({
+        build_index
+    }));
 
     if(!existsSync('disk.img')) {
         // should be raw, idk though

@@ -83,3 +83,8 @@ int k_get_used() {
     }
     return used;
 }
+
+void memcpy(void*dest, void*src, size_t num) {
+    for(size_t i=0;i<num;i++)
+        *(u8*)(dest+i) = *(u8*)(src+i);
+}

@@ -1,4 +1,5 @@
 #include "vga.h"
+#include <memory.h>
 
 static u16 cursor_x = 0;
 static u16 cursor_y = 0;
@@ -51,7 +52,7 @@ void putc_raw(u8 c) {
         cursor_x = 0;
         cursor_y++;
         if(cursor_y > VGA_HEIGHT) {
-            scroll_down();
+            scroll_down((TextAttribute) { .fg = VGA_WHITE, .bg = VGA_BLACK });
             cursor_y--;
         }
     } else {
@@ -82,12 +83,16 @@ void putc(u8 c) {
     set_cursor(cursor_x, cursor_y);
 }
 
+#include <str.h>
 void scroll_down() {
-    for(int i=0;i<VGA_HEIGHT;i++) {
-        for(int x=0;x<VGA_WIDTH;x++) {
-            *(u8*)(0xB8000+x*2+i*VGA_WIDTH) = *(u8*)(0xB8000+x*2+(i+2)*VGA_WIDTH);
-        }
+    u32 line_width = VGA_WIDTH*2;
+
+    for(u32 i=1;i<25;i++) {
+        // i = 1, dest = 0, src = 1
+        // i = 2, dest = 1, src = 2
+        memcpy((u8*)0xB8000+line_width*(i-1), (u8*)0xB8000+line_width*i, line_width);
     }
+    memset((u8*)0xB8000+line_width*(VGA_HEIGHT-1), 0, line_width);
 }
 
 void set_attr(u8 x, u8 y, u8 w, TextAttribute attr) {

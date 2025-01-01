@@ -34,6 +34,7 @@ void exception_handler(u8 d) {
     puts("Exception #");
     puts(itoa(d, 10));
     puts(" called\n");
+    
     __asm__ volatile (
         "cli\n hlt":
     ); // Completely hangs the computer
@@ -44,6 +45,34 @@ static bool vectors[IDT_MAX_DESCRIPTORS];
 
 extern void* isr_stub_table[];
 extern void* irq_handle_table[16];
+
+void disable_IRQ(u8 IRQline) {
+    u16 port;
+    u8 value;
+
+    if(IRQline < 8) {
+        port = PIC1_DATA;
+    } else {
+        port = PIC2_DATA;
+        IRQline -= 8;
+    }
+    value = inb(port) | (1 << IRQline);
+    outb(port, value);        
+}
+
+void enable_IRQ(u8 IRQline) {
+    u16 port;
+    u8 value;
+
+    if(IRQline < 8) {
+        port = PIC1_DATA;
+    } else {
+        port = PIC2_DATA;
+        IRQline -= 8;
+    }
+    value = inb(port) & ~(1 << IRQline);
+    outb(port, value);        
+}
 
 void t_move_pic(u8 off1, u8 off2) {
     u8 a1 = inb(PIC1_DATA);

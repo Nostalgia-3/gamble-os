@@ -69,8 +69,8 @@ void i8042_send_ack(u8 com) {
     } while(resp != 0xFA);
 }
 
-unsigned char kbdmix_scan1[128] = {
-    0,   0,   '0', '1',  '3', '4', '5', '6', '7', '8', '9', '0',
+unsigned char kbdlower_scan1[128] = {
+    0,   0,   '1', '2',  '3', '4', '5', '6', '7', '8', '9', '0',
     '-', '=', '\b','\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i',
     'o', 'p', '[', ']', '\n', 0,   'a', 's', 'd', 'f', 'g', 'h',
     'j', 'k', 'l', ';', '\'', '`', 0,   '\\','z', 'x', 'c', 'v',
@@ -78,6 +78,21 @@ unsigned char kbdmix_scan1[128] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, '7', '8', '9', '-', '4', '5', '6',
     '+', '1', '2', '3', '0', '.'
 };
+
+unsigned char kbdshift_scan1[128] = {
+    0,   0,   '!', '@',  '#', '$', '%', '^', '&', '*', '(', ')',
+    '_', '+', '\b','\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I',
+    'O', 'P', '{', '}', '\n', 0,   'A', 'S', 'D', 'F', 'G', 'H',
+    'J', 'K', 'L', ':', '"', '~', 0,   '|', 'Z', 'X', 'C', 'V',
+    'B', 'N', 'M', '<', '>', '?', 0,    '*', 0, ' ', 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, '7', '8', '9', '-', '4', '5', '6',
+    '+', '1', '2', '3', '0', '.'
+};
+
+#define KBD_RELEASING   0b00000001
+#define KBD_IGNORE      0b00000010
+#define KBD_SHIFT       0b00000100
+#define KBD_LOADED      0b10000000
 
 // @TODO handle device B
 void I8042_DriverEntry(Device *dev) {
@@ -110,7 +125,7 @@ void I8042_DriverEntry(Device *dev) {
 
     i8042_send_ack(0xF5); // disable scanning
     // @TODO disable device B (if possible)
-    i8042_send_cont_comm(0xAB);
+    i8042_send_cont_comm(0xAB); // device #1 testing
     u8 resp = i8042_get_byte();
     if(resp != 0x00) {
         puts("! I8042 dev #1 test failed\n");
@@ -118,17 +133,20 @@ void I8042_DriverEntry(Device *dev) {
     }
     // @TODO test device B (if possible)
     i8042_send_ack(0xFF);
-    resp = i8042_get_byte();
+    resp = i8042_get_byte(); // device #1 self-test
     if(resp != 0xAA) {
         puts("! I8042 dev #1 BAT test failed\n");
         device_a = FALSE;
     }
-    if(device_a) i8042_send_ack(0xF5);
     if(device_a) {
+        i8042_send_ack(0xF5);
         i8042_send_ack(0xF2); // Identify the device
-        u8 device = i8042_get_byte();
+        u16 device = i8042_get_byte();
+        io_wait();
+        io_wait();
+        device |= inb(0x60) << 8;
 
-        if(device == 0xAB) {
+        if((device&0xFF) == 0xAB) {
             Device* kbd = k_add_dev(dev->id, DEV_KEYBOARD, device);
 
             // Failed to add a device
@@ -138,7 +156,10 @@ void I8042_DriverEntry(Device *dev) {
             }
 
             k_register_int((Driver*)dev->data, 0x21);
+            if(device_a) driver->data = (u32*)((u32)driver->data | KBD_LOADED);
+            
             i8042_send_ack(0xF4); // enable scanning
+            
             conf = i8042_get_config();
             conf.first_ps2_int = 1; // enable interrupts
             i8042_set_config(conf);
@@ -150,28 +171,28 @@ void I8042_DriverEntry(Device *dev) {
     }
 }
 
-#define KBD_RELEASING   0b1
-#define KBD_IGNORE      0b10
-
 void I8042_DriverInt(Device *dev, u8 int_id) {
     Driver* driver = (Driver*)dev->data;
     u32 x = (u32)driver->data; // bitfield
 
     if(int_id == 0x21) { // KBD
-        Device *kbd = k_get_device_by_owner(dev->id, DEV_KEYBOARD);
-        KeyboardDeviceData *data = (KeyboardDeviceData*)kbd->data;
-
         u8 scan = inb(0x60);
         if(x & KBD_IGNORE) return;
         if(scan == 0xE0) {
             x |= KBD_IGNORE;
         } else {
-            // puts("p ");
             if(scan > 0x80) {
-                // release
-            } else if(kbdmix_scan1[scan] != 0)
-                data->fifo[data->fifo_ind++] = (kbdmix_scan1[scan]);
-            // putc('\n');
+                if(scan == 0xAA || scan == 0xB6) {
+                    x &= ~(KBD_SHIFT);
+                }
+            } else if(scan == 0x2A || scan == 0x36) {
+                x |= KBD_SHIFT;
+            } else {
+                if(x & KBD_SHIFT)
+                    pushc(kbdshift_scan1[scan]);
+                else
+                    pushc(kbdlower_scan1[scan]);
+            }
         }
 
         driver->data = (void*)x;

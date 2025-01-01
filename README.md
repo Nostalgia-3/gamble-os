@@ -1,6 +1,6 @@
 # Gamble OS
 
-GaOS is the supreme 32-bit operating system.
+GaOS is the supreme 32-bit operating system (technically kernel).
 
 ## Building
 

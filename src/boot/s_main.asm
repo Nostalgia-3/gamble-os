@@ -2,39 +2,13 @@
 [org 0x7c00]
 
 KERNEL_OFFSET   equ 0x1000
-SECS_TO_READ    equ 25
+SECS_TO_READ    equ 45
 
-; hard code a little FAT32 boot record for a 512KiB boot partition
-jmp SHORT reset
-nop
-db "MSWIN4.1"           ; OEM Identifier
-dw 512                  ; bytes per sector
-db 4                    ; sectors per cluster; this might be happier if you put 8 here?
-dw 31                   ; reserved sectors; this includes the kernel
-db 1                    ; number of FATs
-dw 0                    ; number of root directory entries
-dw 1024                 ; total sectors
-db 0                    ; media descriptor byte
-dw 0                    ; sectors per FAT (FAT12/FAT16 only)
-dw 63                   ; sectors per track
-dw 2                    ; heads/sides on storage media
-dd 0                    ; hidden sectors
-dd 0                    ; large sector count
-
-; ; extended boot record
-dd 1024                 ; sectors per fat
-dw 0                    ; flags
-dw 0                    ; version
-dd 0                    ; cluster number of root dir
-dw 1                    ; sector of the FSInfo structure
-dw 0                    ; sector number of the backup boot
-dd 0, 0, 0              ; 12 bytes of reserve
-db 0                    ; drive number
-db 0                    ; flags for windows nt
-db 0x29                 ; signature (0x28 or 0x29)
-dd 0                    ; volume id 'serial' number
-db "TEST       "        ; Volume label
-db "FAT32   "           ; System identifier string
+; hardcode a ShFS header (my own filesystem 🥰)
+jmp SHORT reset ; 0xEB offset:reset
+dw 1            ; info block (the block immediately after this)
+dd 0x53684653   ; signature
+db "GambleOS"   ; Label (8 bytes)
 
 reset:
     xor ax, ax
