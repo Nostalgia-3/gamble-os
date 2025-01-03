@@ -88,6 +88,14 @@ m_irq_handler 13
 m_irq_handler 14
 m_irq_handler 15
 
+extern syscall_handler
+global sysint_handler_asm
+sysint_handler_asm:
+    pushad
+    call syscall_handler
+    popad
+    iretd
+
 global irq_handle_table
 irq_handle_table:
 %assign i 0

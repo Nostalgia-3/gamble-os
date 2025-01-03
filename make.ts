@@ -9,7 +9,7 @@ const GCC = `gcc`;
 
 const MBR = 'build/mbr.bin';
 const KERNEL = 'build/kernel.bin';
-const BOOT = 'build/os.bin';
+const BOOT = 'build/gambleos-{BUILD-INDEX}.bin';
 const LINKER_SCRIPT = 'linker.ld';
 
 // const BIN_SIZE = 1048576;
@@ -20,6 +20,8 @@ const INCLUDE = 'include';
 if(Deno.args[0] == 'listen') {
     m.startExServer();
 } else {
+    Deno.removeSync('build', { recursive: true });
+
     if(!existsSync('build')) {
         Deno.mkdirSync('build');
     }
@@ -73,10 +75,10 @@ if(Deno.args[0] == 'listen') {
     const fBOOT = new Uint8Array(BIN_SIZE); // 4MiB
     fBOOT.set(fMBR);
     fBOOT.set(fKERNEL, fMBR.length);
-    
-    Deno.writeFileSync(BOOT, fBOOT);
 
     build_index++;
+    
+    Deno.writeFileSync(BOOT.replaceAll('{BUILD-INDEX}', build_index.toString()), fBOOT);
 
     // update the .make.json
     Deno.writeTextFileSync('make.json', JSON.stringify({
@@ -89,5 +91,5 @@ if(Deno.args[0] == 'listen') {
     }
 
     // '172.25.112.1' (leaving this here) Deno.args[1]
-    m.exCall(`qemu-system-i386 -drive file=${BOOT},format=raw,index=0,media=disk -drive file=disk.img,format=raw,index=1,media=disk -m 512M -monitor stdio -audio sdl,model=sb16`, Deno.args[0]);
+    m.exCall(`qemu-system-i386 -drive file=${BOOT.replaceAll('{BUILD-INDEX}', build_index.toString())},format=raw,media=disk -drive file=disk.img,format=raw,media=disk -m 1G -monitor stdio -audiodev sdl,id=speaker -machine pcspk-audiodev=speaker`, Deno.args[0]);
 }

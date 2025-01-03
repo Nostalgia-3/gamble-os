@@ -19,4 +19,8 @@ typedef double          f64;
 
 typedef unsigned int    size_t;
 
+typedef typeof((int*)0 - (int*)0) ptrdiff_t;
+
+typedef u32 wint_t;
+
 #endif

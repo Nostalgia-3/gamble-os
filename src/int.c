@@ -3,6 +3,8 @@
 #include "int.h"
 #include "types.h"
 
+#include <port.h>
+
 #define PIC1            0x20        /* IO base address for master PIC */
 #define PIC2            0xA0        /* IO base address for slave PIC */
 #define PIC1_COMMAND    PIC1
@@ -26,14 +28,10 @@ __attribute__((aligned(0x10))) static idt_entry_t idt[IDT_MAX_DESCRIPTORS];
 static idtr_t idtr;
 static bool vectors[IDT_MAX_DESCRIPTORS];
 
-extern void* isr_stub_table[];
-
-#include <str.h>
-#include <vga.h>
 void exception_handler(u8 d) {
-    puts("Exception #");
-    puts(itoa(d, 10));
-    puts(" called\n");
+    // puts("Exception #");
+    // puts(itoa(d, 10));
+    // puts(" called\n");
     
     __asm__ volatile (
         "cli\n hlt":
@@ -45,6 +43,7 @@ static bool vectors[IDT_MAX_DESCRIPTORS];
 
 extern void* isr_stub_table[];
 extern void* irq_handle_table[16];
+extern void sysint_handler_asm();
 
 void disable_IRQ(u8 IRQline) {
     u16 port;
@@ -115,6 +114,9 @@ void idt_init() {
         idt_set_descriptor(vector+0x20, irq_handle_table[vector], 0x8E);
         vectors[vector + 0x20] = TRUE;
     }
+
+    // 32-bit interrupt gate with a DPL equal to #3
+    idt_set_descriptor(80, sysint_handler_asm, 0b11101110);
 
     __asm__ volatile ("lidt %0" : : "m"(idtr)); // load the new IDT
     __asm__ volatile ("sti"); // set the interrupt flag

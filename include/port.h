@@ -26,4 +26,6 @@ extern void outw(u16 port, u16 val);
 extern u32 inl(u16 port);
 extern void outl(u16 port, u32 val);
 
+extern void p_insw(u16 port, u16* buf, u16 size);
+
 #endif

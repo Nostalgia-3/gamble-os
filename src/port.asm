@@ -52,3 +52,24 @@ outl:
     out     dx, eax
     leave
     ret
+
+; extern void insw(u16 port, u16* buf, u16 size);
+global p_insw
+p_insw:
+    push    ebp
+    mov     ebp, esp
+    push    edi
+    sub     esp, 8
+    mov     edx, DWORD [ebp+8]
+    mov     eax, DWORD [ebp+16]
+    mov     WORD [ebp-8], dx
+    mov     WORD [ebp-12], ax
+    movzx   edx, WORD  [ebp-8]
+    mov     eax, DWORD [ebp+12]
+    mov     edi, eax
+    movzx   ecx, WORD [ebp-12]
+    rep insw
+    nop
+    mov     edi, DWORD [ebp-4]
+    leave
+    ret

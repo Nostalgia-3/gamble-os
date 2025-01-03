@@ -1,66 +1,58 @@
 [bits 16]
 [org 0x7c00]
 
-KERNEL_OFFSET   equ 0x1000
-SECS_TO_READ    equ 45
-
-; hardcode a ShFS header (my own filesystem 🥰)
-jmp SHORT reset ; 0xEB offset:reset
-dw 1            ; info block (the block immediately after this)
-dd 0x53684653   ; signature
-db "GambleOS"   ; Label (8 bytes)
+; KERNEL_OFFSET   equ 0x1000
+KERNEL_OFFSET   equ 0x8000
+SECS_TO_READ    equ 80
 
 reset:
     xor ax, ax
     mov ds, ax
+    mov ss, ax
     mov es, ax
-    mov bp, 0x9000
+    mov bp, 0x7C00
     mov sp, bp
 
     mov [BOOT_DRIVE], dl
-
-    mov ah, 0x0e
-    mov al, 'M'
-    int 0x10
     call do_e820
     mov [NUM_MEMORY], bp
-    mov ah, 0x0e
-    mov al, 'L'
-    int 0x10
 load_kernel:
-    pusha
-
-    mov bx, KERNEL_OFFSET
-    mov ah, 0x02        ; read(
-    mov al, SECS_TO_READ;   sectors
-    mov ch, 0x00        ;   cylinder #
-    mov cl, 0x03        ;   starting sector
-    mov dh, 0x00        ;   head #
-    mov dl, [BOOT_DRIVE];   drive
-    int 0x13            ; )
+    mov si, DAPACK
+    mov ax, 0x4200
+    mov dl, 0x80
+    int 0x13
     jc disk_error
-
-    cmp al, SECS_TO_READ; check if # of sectors read == to the number of sectors
-    jne sectors_error
-    popa
+set_vid_mode:
+    ; set mode to 320x200
+    mov ax, 13h
+    ; mov ax, 0x12
+    ; int 0x10
 switch_to_32bit:
-    mov ah, 0x0e
-    mov al, 'S'
-    int 0x10
     cli
     lgdt [gdt_descriptor]
     mov eax, cr0
     or eax, 0x1
     mov cr0, eax
     jmp CODE_SEG:init_32bit
-
     jmp $
+
+DAPACK:
+    db 0x10
+    db 0
+blkcnt:
+    dw SECS_TO_READ
+db_add: ; 0:KERNEL_OFFSET
+    dw KERNEL_OFFSET
+    dw 0
+d_lba:
+    dd 1 ; read from
+    dd 0
 
 BOOT_DRIVE: db 0
 NUM_MEMORY: dd 0
 
 do_e820:
-    mov di, 0x7E00          ; Set di to 0x8004. Otherwise this code will get stuck in `int 0x15` after some entries are fetched 
+    mov di, 0x7E00          ; memory starting
     xor ebx, ebx            ; ebx must be 0 to start
     xor bp, bp              ; keep an entry count in bp
     mov edx, 0x0534D4150    ; Place "SMAP" into edx
@@ -105,9 +97,8 @@ do_e820:
     ret
 disk_error:
     mov ah, 0x0E
-    mov al, 'D'
+    mov al, 'd'
     int 0x10
-    jmp $
 sectors_error:
     mov ah, 0x0E
     mov al, 's'
@@ -159,12 +150,3 @@ init_32bit:
 
 times 510 - ($-$$) db 0
 dw 0xAA55
-
-; FSInfo structure
-dd 0x41615252
-times 480 db 0
-dd 0x61417272
-dd 0xFFFFFFFF
-dd 0xFFFFFFFF
-dd 0, 0, 0
-dd 0xAA550000

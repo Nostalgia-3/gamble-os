@@ -1,7 +1,6 @@
 #include "gosh.h"
 #include <memory.h>
 #include <str.h>
-#include <vga.h>
 #include <math.h>
 #include <port.h>
 
@@ -12,7 +11,45 @@ volatile u32 d_id = 0;
 
 /************************************ MISC ************************************/
 
+// This is blatantly wrong and mildly disgusting (erego, perfect!)
+// (io_wait() takes ~1-4 microseconds; assume it runs at 1 microsecond)
+void wait(u32 ms) {
+    u32 mis = ms*1000;
+    for(u32 i=0;i<mis;i++) {
+        io_wait();
+        io_wait();
+        io_wait();
+        io_wait();
+    }
+}
+
+void play_sound(u32 nFrequence) {
+ 	u32 Div;
+ 	u8 tmp;
+ 
+    //Set the PIT to the desired frequency
+ 	Div = 1193180 / nFrequence;
+ 	outb(0x43, 0xb6);
+ 	outb(0x42, (u8) (Div) );
+ 	outb(0x42, (u8) (Div >> 8));
+ 
+    //And play the sound using the PC speaker
+ 	tmp = inb(0x61);
+  	if (tmp != (tmp | 3)) {
+ 		outb(0x61, tmp | 3);
+ 	}
+ }
+ 
+//make it shut up
+void nosound() {
+    u8 tmp = inb(0x61) & 0xFC;
+    outb(0x61, tmp);
+}
+
 void kpanic() {
+    play_sound(1000);
+    wait(500);
+    nosound();
     __asm__ volatile ("cli\n" "hlt":);
     while(1);
 }
@@ -58,12 +95,24 @@ u8 getc() {
 
 void _init_gdevt() {
     if(gdevt != NULL) return;
-    gdevt = k_malloc(sizeof(Device)*256);
     gdevt_len = 256;
-    memset(gdevt, 0, sizeof(Device)*256);
+    gdevt = k_malloc(sizeof(Device)*gdevt_len);
+    memset((void*)gdevt, 0, sizeof(Device)*gdevt_len);
+    for(int i=0;i<gdevt_len;i++)
+        gdevt[i].is_active = FALSE;
 
     // standard keyboard output
-    Device *dev = k_add_dev(KERNEL_ID, DEV_KEYBOARD, 0);
+    Device *kbd = k_add_dev(KERNEL_ID, DEV_KEYBOARD, 0);
+    if(kbd == NULL) kpanic();
+
+    Device *stdvt = k_add_dev(KERNEL_ID, DEV_VIRT_TERM, 0);
+    if(stdvt == NULL) kpanic();
+    VTDeviceData* vtdata = stdvt->data;
+    if(vtdata == NULL) kpanic();
+    vtdata->text = k_malloc(5000);
+    if(vtdata->text == NULL) kpanic();
+    memset(vtdata->text, 0, 5000);
+    vtdata->textlen = 5000;
 }
 
 Device* get_gdevt() {
@@ -95,50 +144,78 @@ Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code) {
     }
 
     // no free devices
-    if(id == 0) return NULL;
+    if(id == 0) {
+        return NULL;
+    }
+
+    memset(&gdevt[ind], 0, sizeof(Device));
 
     switch(dev) {
         case DEV_KEYBOARD:
-            puts("Registered keyboard ");
             gdevt[ind].data = k_malloc(sizeof(KeyboardDeviceData));
             if(gdevt[ind].data == NULL) return NULL;
             memset(gdevt[ind].data, 0, sizeof(KeyboardDeviceData));
         break;
 
         case DEV_DRIVER:
-            puts("Registered driver ");
             // This is defined in k_load_driver() as the pointer to the driver
             gdevt[ind].data = NULL;
         break;
 
+        case DEV_DRIVE:
+            gdevt[ind].data = k_malloc(sizeof(DriveDeviceData));
+            if(gdevt[ind].data == NULL) return NULL;
+            memset(gdevt[ind].data, 0, sizeof(DriveDeviceData));
+        break;
+
+        case DEV_FRAMEBUFFER:
+            gdevt[ind].data = k_malloc(sizeof(FBDeviceData));
+            if(gdevt[ind].data == NULL) return NULL;
+            memset(gdevt[ind].data, 0, sizeof(FBDeviceData));
+        break;
+
+        case DEV_VIRT_TERM:
+            gdevt[ind].data = k_malloc(sizeof(VTDeviceData));
+            if(gdevt[ind].data == NULL) return NULL;
+            memset(gdevt[ind].data, 0, sizeof(VTDeviceData));
+        break;
+
         default:
-            puts("Device #");
-            puts(itoa(dev, 10));
-            puts(" not handled yet\n");
+            // puts("Device #");
+            // puts(itoa(dev, 10));
+            // puts(" not handled yet\n");
+            return NULL;
         break;
     }
-
-    puts("(owner = ");
-    puts(itoa(kid, 10));
-    puts(", dev_type = ");
-    puts(itoa(dev, 10));
-    puts(", code = ");
-    puts(itoa(code, 10));
-    puts(", id = ");
-    puts(itoa(id, 10));
-    puts(")\n");
 
     gdevt[ind].id = id;
     gdevt[ind].code = code;
     gdevt[ind].type = dev;
     gdevt[ind].owner = kid;
+    gdevt[ind].is_active = TRUE;
 
     return &gdevt[ind];
 }
 
 Device* k_get_device_by_owner(u32 owner, enum DeviceType type) {
     for(u32 i=0;i<gdevt_len;i++) {
-        if(gdevt[i].owner == owner && gdevt[i].type == type) return &gdevt[i];
+        if(gdevt[i].owner == owner && (type == DEV_UNKNOWN || gdevt[i].type == type)) return &gdevt[i];
+    }
+
+    return NULL;
+}
+
+Device* k_get_device_by_id(u32 id, enum DeviceType type) {
+    for(u32 i=0;i<gdevt_len;i++) {
+        if(gdevt[i].id == id && (type == DEV_UNKNOWN || gdevt[i].type == type)) return &gdevt[i];
+    }
+
+    return NULL;
+}
+
+Device* k_get_device_by_type(enum DeviceType type) {
+    for(u32 i=0;i<gdevt_len;i++) {
+        if(gdevt[i].type == type) return &gdevt[i];
     }
 
     return NULL;
@@ -179,7 +256,6 @@ void k_handle_int(u8 int_id) {
         }
     }
 }
-
 
 bool k_register_int(Driver *driver, u8 int_id) {
     if(driver == NULL) return FALSE;
@@ -229,11 +305,155 @@ PCIHeader pci_get_header(u8 bus, u8 slot) {
     header.header_type      = byte & 0xFF;
     header.BIST             = (byte >> 8) & 0xFF;
     
-
     return header;
 }
 
+u16 scan_pci(u16 class, u16 subclass) {
+    for(u8 i=0;i<255;i++) {
+        for(u8 x=0;x<32;x++) {
+            PCIHeader header = pci_get_header(i, x);
+            if(header.class_code == class && header.subclass) return (i << 8) | x;
+        }
+    }
+    
+    return 0xFFFF;
+}
+
 /******************************** FRAME BUFFER ********************************/
+
+char font8x8_basic[128][8] = {
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0000 (nul)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0001
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0002
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0003
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0004
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0005
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0006
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0007
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0008
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0009
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000A
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000B
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000C
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000D
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000E
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000F
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0010
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0011
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0012
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0013
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0014
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0015
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0016
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0017
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0018
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0019
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001A
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001B
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001C
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001D
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001E
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001F
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0020 (space)
+    { 0x18, 0x3C, 0x3C, 0x18, 0x18, 0x00, 0x18, 0x00},   // U+0021 (!)
+    { 0x36, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0022 (")
+    { 0x36, 0x36, 0x7F, 0x36, 0x7F, 0x36, 0x36, 0x00},   // U+0023 (#)
+    { 0x0C, 0x3E, 0x03, 0x1E, 0x30, 0x1F, 0x0C, 0x00},   // U+0024 ($)
+    { 0x00, 0x63, 0x33, 0x18, 0x0C, 0x66, 0x63, 0x00},   // U+0025 (%)
+    { 0x1C, 0x36, 0x1C, 0x6E, 0x3B, 0x33, 0x6E, 0x00},   // U+0026 (&)
+    { 0x06, 0x06, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0027 (')
+    { 0x18, 0x0C, 0x06, 0x06, 0x06, 0x0C, 0x18, 0x00},   // U+0028 (()
+    { 0x06, 0x0C, 0x18, 0x18, 0x18, 0x0C, 0x06, 0x00},   // U+0029 ())
+    { 0x00, 0x66, 0x3C, 0xFF, 0x3C, 0x66, 0x00, 0x00},   // U+002A (*)
+    { 0x00, 0x0C, 0x0C, 0x3F, 0x0C, 0x0C, 0x00, 0x00},   // U+002B (+)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C, 0x06},   // U+002C (,)
+    { 0x00, 0x00, 0x00, 0x3F, 0x00, 0x00, 0x00, 0x00},   // U+002D (-)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C, 0x00},   // U+002E (.)
+    { 0x60, 0x30, 0x18, 0x0C, 0x06, 0x03, 0x01, 0x00},   // U+002F (/)
+    { 0x3E, 0x63, 0x73, 0x7B, 0x6F, 0x67, 0x3E, 0x00},   // U+0030 (0)
+    { 0x0C, 0x0E, 0x0C, 0x0C, 0x0C, 0x0C, 0x3F, 0x00},   // U+0031 (1)
+    { 0x1E, 0x33, 0x30, 0x1C, 0x06, 0x33, 0x3F, 0x00},   // U+0032 (2)
+    { 0x1E, 0x33, 0x30, 0x1C, 0x30, 0x33, 0x1E, 0x00},   // U+0033 (3)
+    { 0x38, 0x3C, 0x36, 0x33, 0x7F, 0x30, 0x78, 0x00},   // U+0034 (4)
+    { 0x3F, 0x03, 0x1F, 0x30, 0x30, 0x33, 0x1E, 0x00},   // U+0035 (5)
+    { 0x1C, 0x06, 0x03, 0x1F, 0x33, 0x33, 0x1E, 0x00},   // U+0036 (6)
+    { 0x3F, 0x33, 0x30, 0x18, 0x0C, 0x0C, 0x0C, 0x00},   // U+0037 (7)
+    { 0x1E, 0x33, 0x33, 0x1E, 0x33, 0x33, 0x1E, 0x00},   // U+0038 (8)
+    { 0x1E, 0x33, 0x33, 0x3E, 0x30, 0x18, 0x0E, 0x00},   // U+0039 (9)
+    { 0x00, 0x0C, 0x0C, 0x00, 0x00, 0x0C, 0x0C, 0x00},   // U+003A (:)
+    { 0x00, 0x0C, 0x0C, 0x00, 0x00, 0x0C, 0x0C, 0x06},   // U+003B (;)
+    { 0x18, 0x0C, 0x06, 0x03, 0x06, 0x0C, 0x18, 0x00},   // U+003C (<)
+    { 0x00, 0x00, 0x3F, 0x00, 0x00, 0x3F, 0x00, 0x00},   // U+003D (=)
+    { 0x06, 0x0C, 0x18, 0x30, 0x18, 0x0C, 0x06, 0x00},   // U+003E (>)
+    { 0x1E, 0x33, 0x30, 0x18, 0x0C, 0x00, 0x0C, 0x00},   // U+003F (?)
+    { 0x3E, 0x63, 0x7B, 0x7B, 0x7B, 0x03, 0x1E, 0x00},   // U+0040 (@)
+    { 0x0C, 0x1E, 0x33, 0x33, 0x3F, 0x33, 0x33, 0x00},   // U+0041 (A)
+    { 0x3F, 0x66, 0x66, 0x3E, 0x66, 0x66, 0x3F, 0x00},   // U+0042 (B)
+    { 0x3C, 0x66, 0x03, 0x03, 0x03, 0x66, 0x3C, 0x00},   // U+0043 (C)
+    { 0x1F, 0x36, 0x66, 0x66, 0x66, 0x36, 0x1F, 0x00},   // U+0044 (D)
+    { 0x7F, 0x46, 0x16, 0x1E, 0x16, 0x46, 0x7F, 0x00},   // U+0045 (E)
+    { 0x7F, 0x46, 0x16, 0x1E, 0x16, 0x06, 0x0F, 0x00},   // U+0046 (F)
+    { 0x3C, 0x66, 0x03, 0x03, 0x73, 0x66, 0x7C, 0x00},   // U+0047 (G)
+    { 0x33, 0x33, 0x33, 0x3F, 0x33, 0x33, 0x33, 0x00},   // U+0048 (H)
+    { 0x1E, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+0049 (I)
+    { 0x78, 0x30, 0x30, 0x30, 0x33, 0x33, 0x1E, 0x00},   // U+004A (J)
+    { 0x67, 0x66, 0x36, 0x1E, 0x36, 0x66, 0x67, 0x00},   // U+004B (K)
+    { 0x0F, 0x06, 0x06, 0x06, 0x46, 0x66, 0x7F, 0x00},   // U+004C (L)
+    { 0x63, 0x77, 0x7F, 0x7F, 0x6B, 0x63, 0x63, 0x00},   // U+004D (M)
+    { 0x63, 0x67, 0x6F, 0x7B, 0x73, 0x63, 0x63, 0x00},   // U+004E (N)
+    { 0x1C, 0x36, 0x63, 0x63, 0x63, 0x36, 0x1C, 0x00},   // U+004F (O)
+    { 0x3F, 0x66, 0x66, 0x3E, 0x06, 0x06, 0x0F, 0x00},   // U+0050 (P)
+    { 0x1E, 0x33, 0x33, 0x33, 0x3B, 0x1E, 0x38, 0x00},   // U+0051 (Q)
+    { 0x3F, 0x66, 0x66, 0x3E, 0x36, 0x66, 0x67, 0x00},   // U+0052 (R)
+    { 0x1E, 0x33, 0x07, 0x0E, 0x38, 0x33, 0x1E, 0x00},   // U+0053 (S)
+    { 0x3F, 0x2D, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+0054 (T)
+    { 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x3F, 0x00},   // U+0055 (U)
+    { 0x33, 0x33, 0x33, 0x33, 0x33, 0x1E, 0x0C, 0x00},   // U+0056 (V)
+    { 0x63, 0x63, 0x63, 0x6B, 0x7F, 0x77, 0x63, 0x00},   // U+0057 (W)
+    { 0x63, 0x63, 0x36, 0x1C, 0x1C, 0x36, 0x63, 0x00},   // U+0058 (X)
+    { 0x33, 0x33, 0x33, 0x1E, 0x0C, 0x0C, 0x1E, 0x00},   // U+0059 (Y)
+    { 0x7F, 0x63, 0x31, 0x18, 0x4C, 0x66, 0x7F, 0x00},   // U+005A (Z)
+    { 0x1E, 0x06, 0x06, 0x06, 0x06, 0x06, 0x1E, 0x00},   // U+005B ([)
+    { 0x03, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x40, 0x00},   // U+005C (\)
+    { 0x1E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x1E, 0x00},   // U+005D (])
+    { 0x08, 0x1C, 0x36, 0x63, 0x00, 0x00, 0x00, 0x00},   // U+005E (^)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF},   // U+005F (_)
+    { 0x0C, 0x0C, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0060 (`)
+    { 0x00, 0x00, 0x1E, 0x30, 0x3E, 0x33, 0x6E, 0x00},   // U+0061 (a)
+    { 0x07, 0x06, 0x06, 0x3E, 0x66, 0x66, 0x3B, 0x00},   // U+0062 (b)
+    { 0x00, 0x00, 0x1E, 0x33, 0x03, 0x33, 0x1E, 0x00},   // U+0063 (c)
+    { 0x38, 0x30, 0x30, 0x3e, 0x33, 0x33, 0x6E, 0x00},   // U+0064 (d)
+    { 0x00, 0x00, 0x1E, 0x33, 0x3f, 0x03, 0x1E, 0x00},   // U+0065 (e)
+    { 0x1C, 0x36, 0x06, 0x0f, 0x06, 0x06, 0x0F, 0x00},   // U+0066 (f)
+    { 0x00, 0x00, 0x6E, 0x33, 0x33, 0x3E, 0x30, 0x1F},   // U+0067 (g)
+    { 0x07, 0x06, 0x36, 0x6E, 0x66, 0x66, 0x67, 0x00},   // U+0068 (h)
+    { 0x0C, 0x00, 0x0E, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+0069 (i)
+    { 0x30, 0x00, 0x30, 0x30, 0x30, 0x33, 0x33, 0x1E},   // U+006A (j)
+    { 0x07, 0x06, 0x66, 0x36, 0x1E, 0x36, 0x67, 0x00},   // U+006B (k)
+    { 0x0E, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+006C (l)
+    { 0x00, 0x00, 0x33, 0x7F, 0x7F, 0x6B, 0x63, 0x00},   // U+006D (m)
+    { 0x00, 0x00, 0x1F, 0x33, 0x33, 0x33, 0x33, 0x00},   // U+006E (n)
+    { 0x00, 0x00, 0x1E, 0x33, 0x33, 0x33, 0x1E, 0x00},   // U+006F (o)
+    { 0x00, 0x00, 0x3B, 0x66, 0x66, 0x3E, 0x06, 0x0F},   // U+0070 (p)
+    { 0x00, 0x00, 0x6E, 0x33, 0x33, 0x3E, 0x30, 0x78},   // U+0071 (q)
+    { 0x00, 0x00, 0x3B, 0x6E, 0x66, 0x06, 0x0F, 0x00},   // U+0072 (r)
+    { 0x00, 0x00, 0x3E, 0x03, 0x1E, 0x30, 0x1F, 0x00},   // U+0073 (s)
+    { 0x08, 0x0C, 0x3E, 0x0C, 0x0C, 0x2C, 0x18, 0x00},   // U+0074 (t)
+    { 0x00, 0x00, 0x33, 0x33, 0x33, 0x33, 0x6E, 0x00},   // U+0075 (u)
+    { 0x00, 0x00, 0x33, 0x33, 0x33, 0x1E, 0x0C, 0x00},   // U+0076 (v)
+    { 0x00, 0x00, 0x63, 0x6B, 0x7F, 0x7F, 0x36, 0x00},   // U+0077 (w)
+    { 0x00, 0x00, 0x63, 0x36, 0x1C, 0x36, 0x63, 0x00},   // U+0078 (x)
+    { 0x00, 0x00, 0x33, 0x33, 0x33, 0x3E, 0x30, 0x1F},   // U+0079 (y)
+    { 0x00, 0x00, 0x3F, 0x19, 0x0C, 0x26, 0x3F, 0x00},   // U+007A (z)
+    { 0x38, 0x0C, 0x0C, 0x07, 0x0C, 0x0C, 0x38, 0x00},   // U+007B ({)
+    { 0x18, 0x18, 0x18, 0x00, 0x18, 0x18, 0x18, 0x00},   // U+007C (|)
+    { 0x07, 0x0C, 0x0C, 0x38, 0x0C, 0x0C, 0x07, 0x00},   // U+007D (})
+    { 0x6E, 0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+007E (~)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}    // U+007F
+};
+
+#define draw_index_pixel(buf, x, y, w, col) *(u8*)((buf)+(x)+((y)*w)) = (col)
+#define draw_plane_pixel(buf, x, y, w, col) if((col) == 0) *(u8*)((buf)+((x) + (y)*(w))) |= (col); else *(u8*)((buf)+((x) + (y)*(w))) &= ~(col);
 
 bool fb_is_available() {
     for(u32 i=0;i<gdevt_len;i++) {
@@ -244,19 +464,654 @@ bool fb_is_available() {
 }
 
 /** @todo Make FBPreference do something  */
-u32 fb_get(enum FBPreference pref) {
+Device* fb_get(enum FBPreference pref) {
     for(u32 i=0;i<gdevt_len;i++) {
-        if(gdevt[i].type == DEV_FRAMEBUFFER) return i;
+        if(gdevt[i].type == DEV_FRAMEBUFFER) return &gdevt[i];
     }
 
-    return 0xFFFFFFFF;
+    return NULL;
 }
 
-FBInfo fb_get_info(u32 gdevt_ind) {
-
+FBInfo fb_get_info(Device *fb) {
+    return *(FBInfo*)fb->data;
 }
 
 // Draw a single pixel at (x, y) with the best available match for the color
 // sent
-void    fb_draw_pixel(u32 fbid, u16 x, u16 y, u32 color);
-void    fb_draw_rect(u32 fbid, u16 x, u16 y, u16 w, u16 h, u32 color);
+void fb_draw_pixel(Device *fb, u16 x, u16 y, u32 color) {
+    if(fb == NULL) return; // invalid fb
+
+    FBInfo* info = (FBInfo*)fb->data;
+    if(info == NULL) return;
+
+    if(x > info->w || y > info->h) return;
+
+    if(info->format == PixelFormat_LINEAR_I8) {
+        *(u8*)(info->buffer + x+y*info->w) = (u8)color;
+    } else if(info->format == PixelFormat_RGB_I4) {
+        u16 bit = x%8;
+        u16 byte = ((x-bit)+y*640)/8;
+
+        *(u8*)(info->buffer + ((x)+y*info->w)/8 + 0x00000) |= ((u8)color & 1 ? 1 : 0) << (8-(x%8+1));
+        *(u8*)(info->buffer + ((x)+y*info->w)/8 + 0x0FFFF) |= ((u8)color & 2 ? 1 : 0) << (8-(x%8+1));
+        *(u8*)(info->buffer + ((x)+y*info->w)/8 + 0x1FFFE) |= ((u8)color & 4 ? 1 : 0) << (8-(x%8+1));
+        *(u8*)(info->buffer + ((x)+y*info->w)/8 + 0x2FFFD) |= ((u8)color & 8 ? 1 : 0) << (8-(x%8+1));
+    }
+
+    if(info->buf_update) info->buf_update();
+}
+
+void fb_draw_rect(Device* fb, u16 x, u16 y, u16 w, u16 h, u32 color) {
+    if(fb == NULL) return; // invalid fb
+
+    FBInfo* info = (FBInfo*)fb->data;
+    if(info == NULL) return;
+
+    if(info->format == PixelFormat_LINEAR_I8) {
+        for(u16 iy=0;iy<h;iy++) {
+            for(u16 ix=0;ix<w;ix++) {
+                *(u8*)((info->buffer)+(ix+x)+((iy+y)*info->w)) = (color);
+            }
+        }
+    } else if(info->format == PixelFormat_RGB_I4) {
+        for(u16 iy=0;iy<h;iy++) {
+            for(u16 ix=0;ix<w;ix++) {
+                u8 bit = (1) << (8-((x+ix)%8+1));
+
+                if(color & 1)
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x00000) |= bit;
+                else
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x00000) &= ~bit;
+                
+                if(color & 2)
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x0FFFF) |= bit;
+                else
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x0FFFF) &= ~bit;
+                
+                if(color & 4)
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x1FFFE) |= bit;
+                else
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x1FFFE) &= ~bit;
+                
+                if(color & 8)
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x2FFFD) |= bit;
+                else
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x2FFFD) &= ~bit;
+            }
+        }
+    }
+
+    if(info->buf_update) info->buf_update();
+}
+
+void fb_draw_char(Device *fb, u16 x, u16 y, u8 c, u32 color) {
+    if(fb == NULL) return;
+    for(u8 ix=0;ix<8;ix++) {
+        for(u8 iy=0;iy<8;iy++) {
+            if(font8x8_basic[c][iy] & (1 << ix))
+                fb_draw_pixel(fb, x+ix, y+iy, color);
+        }
+    }
+}
+
+void fb_clear(Device *fb, u32 color) {
+    if(fb == NULL) return; // invalid fb
+
+    FBInfo* info = (FBInfo*)fb->data;
+    if(info == NULL) return;
+
+    if(info->format == PixelFormat_LINEAR_I8) {
+        for(int i=0;i<info->w*info->h;i++) {
+            *(u8*)(info->buffer+i) = (u8)color;
+        }
+    } else if(info->format == PixelFormat_RGB_I4) {
+        for(int i=0;i<info->w*info->h/8;i++) {
+            *(u8*)(info->buffer+i) = (u8)color;
+        }
+    }
+
+    if(info->buf_update) info->buf_update();
+}
+
+/****************************** VIRTUAL TERMINAL ******************************/
+
+void putcnoup(Device *vt, u8 key) {
+    VTDeviceData* data = (VTDeviceData*) vt->data;
+    if(data->textind+1 > data->textlen) return;
+    if(key == '\b') {
+        data->textind--;
+        memset(data->text+data->textind, 0, data->textlen-data->textind);
+    } else {
+        data->text[data->textind++] = key;
+    }
+}
+
+void putsnoup(Device *vt, u8 *st) {
+    for(int i=0;i<strlen(st);i++) {
+        putcnoup(vt, st[i]);
+    }
+}
+
+char* __int_str(u32 i, char b[], int base, bool plusSignIfNeeded, bool spaceSignIfNeeded,
+                int paddingNo, bool justify, bool zeroPad) {
+    
+    char digit[32] = {0};
+    memset(digit, 0, 32);
+    strcpy(digit, "0123456789");
+    
+    if (base == 16) {
+        strcat(digit, "ABCDEF");
+    } else if (base == 17) {
+        strcat(digit, "abcdef");
+        base = 16;
+    }
+    
+    char* p = b;
+    if (i < 0) {
+        *p++ = '-';
+        i *= -1;
+    } else if (plusSignIfNeeded) {
+        *p++ = '+';
+    } else if (!plusSignIfNeeded && spaceSignIfNeeded) {
+        *p++ = ' ';
+    }
+    
+    u32 shifter = i;
+    do {
+        ++p;
+        shifter = shifter / base;
+    } while (shifter);
+    
+    *p = '\0';
+    do {
+        *--p = digit[i % base];
+        i = i / base;
+    } while (i);
+    
+    int padding = paddingNo - (int)strlen(b);
+    if (padding < 0) padding = 0;
+    
+    if (justify) {
+        while (padding--) {
+            if (zeroPad) {
+                b[strlen(b)] = '0';
+            } else {
+                b[strlen(b)] = ' ';
+            }
+        }
+        
+    } else {
+        char a[256] = {0};
+        while (padding--) {
+            if (zeroPad) {
+                a[strlen(a)] = '0';
+            } else {
+                a[strlen(a)] = ' ';
+            }
+        }
+        strcat(a, b);
+        strcpy(b, a);
+    }
+    
+    return b;
+}
+
+void v_kprintf(const char *format, va_list list) {
+    Device *vt = k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
+    if(vt == NULL) return; // no virtual terminal?
+
+    u32 chars = 0;
+    char intStrBuffer[256] = {0};
+
+    for(int i=0; format[i]; ++i) {
+        char specifier   = '\0';
+        char length      = '\0';
+        int  lengthSpec  = 0; 
+        int  precSpec    = 0;
+        bool leftJustify = FALSE;
+        bool zeroPad     = FALSE;
+        bool spaceNoSign = FALSE;
+        bool altForm     = FALSE;
+        bool plusSign    = FALSE;
+        bool emode       = FALSE;
+        int  expo        = 0;
+
+        if(format[i] == '%') {
+            ++i;
+
+            bool extBreak = FALSE;
+            while(1) {
+                switch (format[i]) {
+                    case '-':
+                        leftJustify = TRUE;
+                        ++i;
+                        break;
+                        
+                    case '+':
+                        plusSign = TRUE;
+                        ++i;
+                        break;
+                        
+                    case '#':
+                        altForm = TRUE;
+                        ++i;
+                        break;
+                        
+                    case ' ':
+                        spaceNoSign = TRUE;
+                        ++i;
+                        break;
+                        
+                    case '0':
+                        zeroPad = TRUE;
+                        ++i;
+                        break;
+                        
+                    default:
+                        extBreak = TRUE;
+                        break;
+                }
+                
+                if (extBreak) break;
+            }
+
+            while(is_digit(format[i])) {
+                lengthSpec *= 10;
+                lengthSpec += format[i] - '0';
+                ++i;
+            }
+
+            if(format[i] == '*') {
+                lengthSpec = va_arg(list, int);
+                ++i;
+            }
+
+            if(format[i] == '.') {
+                ++i;
+                while (is_digit(format[i])) {
+                    precSpec *= 10;
+                    precSpec += format[i] - 48;
+                    ++i;
+                }
+                
+                if (format[i] == '*') {
+                    precSpec = va_arg(list, int);
+                    ++i;
+                }
+            }
+
+            if (format[i] == 'h' || format[i] == 'l' || format[i] == 'j' ||
+                   format[i] == 'z' || format[i] == 't' || format[i] == 'L') {
+                length = format[i];
+                ++i;
+                if (format[i] == 'h') {
+                    length = 'H';
+                } else if (format[i] == 'l') {
+                    length = 'q';
+                    ++i;
+                }
+            }
+            specifier = format[i];
+            
+            memset(intStrBuffer, 0, 256);
+            
+            int base = 10;
+            if (specifier == 'o') {
+                base = 8;
+                specifier = 'u';
+                if (altForm) {
+                    putcnoup(vt, '0');
+                }
+            }
+            if (specifier == 'p') {
+                base = 16;
+                length = 'z';
+                specifier = 'u';
+            }
+            switch (specifier) {
+                case 'X':
+                    base = 16;
+                case 'x':
+                    base = base == 10 ? 17 : base;
+                    if (altForm) {
+                        putsnoup(vt, "0x");
+                    }
+                    
+                case 'u':
+                {
+                    switch (length) {
+                        case 0:
+                        {
+                            unsigned int integer = va_arg(list, unsigned int);
+                            __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                            putsnoup(vt, intStrBuffer);
+                            break;
+                        }
+                        case 'H':
+                        {
+                            unsigned char integer = (unsigned char) va_arg(list, unsigned int);
+                            __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                            putsnoup(vt, intStrBuffer);
+                            break;
+                        }
+                        case 'h':
+                        {
+                            unsigned short int integer = va_arg(list, unsigned int);
+                            __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                            putsnoup(vt, intStrBuffer);
+                            break;
+                        }
+                        case 'l':
+                        {
+                            unsigned long integer = va_arg(list, unsigned long);
+                            __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                            putsnoup(vt, intStrBuffer);
+                            break;
+                        }
+                        case 'q':
+                        {
+                            unsigned long long integer = va_arg(list, unsigned long long);
+                            __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                            putsnoup(vt, intStrBuffer);
+                            break;
+                        }
+                        case 'j':
+                        {
+                            u32 integer = va_arg(list, u32);
+                            __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                            putsnoup(vt, intStrBuffer);
+                            break;
+                        }
+                        case 'z':
+                        {
+                            size_t integer = va_arg(list, size_t);
+                            __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                            putsnoup(vt, intStrBuffer);
+                            break;
+                        }
+                        case 't':
+                        {
+                            ptrdiff_t integer = va_arg(list, ptrdiff_t);
+                            __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                            putsnoup(vt, intStrBuffer);
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                    break;
+                }
+                    
+                case 'd':
+                case 'i':
+                {
+                    switch (length) {
+                    case 0:
+                    {
+                        int integer = va_arg(list, int);
+                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        putsnoup(vt, intStrBuffer);
+                        break;
+                    }
+                    case 'H':
+                    {
+                        signed char integer = (signed char) va_arg(list, int);
+                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        putsnoup(vt, intStrBuffer);
+                        break;
+                    }
+                    case 'h':
+                    {
+                        short int integer = va_arg(list, int);
+                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        putsnoup(vt, intStrBuffer);
+                        break;
+                    }
+                    case 'l':
+                    {
+                        long integer = va_arg(list, long);
+                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        putsnoup(vt, intStrBuffer);
+                        break;
+                    }
+                    case 'q':
+                    {
+                        long long integer = va_arg(list, long long);
+                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        putsnoup(vt, intStrBuffer);
+                        break;
+                    }
+                    case 'j':
+                    {
+                        u32 integer = va_arg(list, u32);
+                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        putsnoup(vt, intStrBuffer);
+                        break;
+                    }
+                    case 'z':
+                    {
+                        size_t integer = va_arg(list, size_t);
+                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        putsnoup(vt, intStrBuffer);
+                        break;
+                    }
+                    case 't':
+                    {
+                        ptrdiff_t integer = va_arg(list, ptrdiff_t);
+                        __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
+                        putsnoup(vt, intStrBuffer);
+                        break;
+                    }
+                    default:
+                        break;
+                    }
+                    break;
+                }
+                    
+                case 'c':
+                {
+                    if (length == 'l') {
+                        putcnoup(vt, va_arg(list, wint_t));
+                    } else {
+                        putcnoup(vt, va_arg(list, int));
+                    }
+                    
+                    break;
+                }
+                    
+                case 's':
+                {
+                    putsnoup(vt, va_arg(list, char*));
+                    break;
+                }
+                    
+                case 'n':
+                {
+                    switch (length) {
+                        case 'H':
+                            *(va_arg(list, signed char*)) = chars;
+                            break;
+                        case 'h':
+                            *(va_arg(list, short int*)) = chars;
+                            break;
+                            
+                        case 0: {
+                            int* a = va_arg(list, int*);
+                            *a = chars;
+                            break;
+                        }
+                            
+                        case 'l':
+                            *(va_arg(list, long*)) = chars;
+                            break;
+                        case 'q':
+                            *(va_arg(list, long long*)) = chars;
+                            break;
+                        case 'j':
+                            *(va_arg(list, u32*)) = chars;
+                            break;
+                        case 'z':
+                            *(va_arg(list, size_t*)) = chars;
+                            break;
+                        case 't':
+                            *(va_arg(list, ptrdiff_t*)) = chars;
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                }
+                   
+                case 'e':
+                case 'E':
+                    emode = TRUE;
+                    
+                case 'f':
+                case 'F':
+                case 'g':
+                case 'G':
+                {
+                    double floating = va_arg(list, double);
+                    
+                    while (emode && floating >= 10) {
+                        floating /= 10;
+                        ++expo;
+                    }
+                    
+                    int form = lengthSpec - precSpec - expo - (precSpec || altForm ? 1 : 0);
+                    if (emode) {
+                        form -= 4;      // 'e+00'
+                    }
+                    if (form < 0) {
+                        form = 0;
+                    }
+                    
+                    __int_str(floating, intStrBuffer, base, plusSign, spaceNoSign, form, \
+                              leftJustify, zeroPad);
+                    
+                    putsnoup(vt, intStrBuffer);
+                    
+                    floating -= (int) floating;
+                    
+                    for (int i = 0; i < precSpec; ++i) {
+                        floating *= 10;
+                    }
+                    u32 decPlaces = (u32) (floating + 0.5);
+                    
+                    if (precSpec) {
+                        putcnoup(vt, '.');
+                        __int_str(decPlaces, intStrBuffer, 10, FALSE, FALSE, 0, FALSE, FALSE);
+                        intStrBuffer[precSpec] = 0;
+                        putsnoup(vt, intStrBuffer);
+                    } else if (altForm) {
+                        putcnoup(vt, '.');
+                    }
+                    
+                    break;
+                }
+                    
+                    
+                case 'a':
+                case 'A':
+                    //ACK! Hexadecimal floating points...
+                    break;
+                
+                default:
+                    break;
+            }
+            
+            if (specifier == 'e') {
+                putsnoup(vt, "e+");
+            } else if (specifier == 'E') {
+                putsnoup(vt, "E+");
+            }
+            
+            if (specifier == 'e' || specifier == 'E') {
+                __int_str(expo, intStrBuffer, 10, FALSE, FALSE, 2, FALSE, TRUE);
+                putsnoup(vt, intStrBuffer);
+            }
+            
+        } else {
+            putcnoup(vt, format[i]);
+        }
+    }
+}
+
+void update(Device *vt) {
+    if(vt == NULL) return;
+    if(((VTDeviceData*)vt->data)->write_handler)
+        ((VTDeviceData*)vt->data)->write_handler(vt);
+}
+
+__attribute__ ((format (printf, 1, 2))) void kprintf(const char* format, ...) {
+    Device *vt = k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
+    if(vt == NULL) return;
+    va_list list;
+    va_start (list, format);
+    v_kprintf(format, list);
+    va_end (list);
+
+    if(((VTDeviceData*)vt->data)->write_handler)
+        ((VTDeviceData*)vt->data)->write_handler(vt);
+}
+
+__attribute__ ((format (printf, 1, 2))) void kprintfnoup(const char* format, ...) {
+    Device *vt = k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
+    if(vt == NULL) return;
+    va_list list;
+    va_start (list, format);
+    v_kprintf(format, list);
+    va_end (list);
+}
+
+void puts_vt(Device *vt, u8* str) {
+    if(vt == NULL || vt->type != DEV_VIRT_TERM || vt->data == NULL) return;
+
+    for(size_t i=0;i<strlen(str);i++) {
+        putcnoup(vt, str[i]);
+    }
+
+    if(((VTDeviceData*)vt->data)->write_handler)
+        ((VTDeviceData*)vt->data)->write_handler(vt);
+}
+
+void putc_vt(Device *vt, u8 key) {
+    if(vt == NULL || vt->type != DEV_VIRT_TERM || vt->data == NULL) return;
+
+    putcnoup(vt, key);
+
+    if(((VTDeviceData*)vt->data)->write_handler)
+        ((VTDeviceData*)vt->data)->write_handler(vt);
+}
+
+void input_vt(Device *vt, u8 key) {
+    if(vt == NULL || vt->type != DEV_VIRT_TERM || vt->data == NULL) return;
+
+    VTDeviceData* vtd = (VTDeviceData*)vt->data;
+    
+    if(vtd->infifo_ind > vtd->infifo_len) return;
+    vtd->infifo[vtd->infifo_ind++] = key;
+}
+
+u8 readc_vt(Device *vt) {
+    if(vt == NULL || vt->type != DEV_VIRT_TERM || vt->data == NULL) return 0;
+
+    VTDeviceData* data = (VTDeviceData*) vt->data;
+    u8 k = data->infifo[0];
+    if(k == 0) return 0;
+
+    memcpy(data->infifo, data->infifo+1, sizeof(data->infifo)-1);
+    if(data->infifo_ind != 0) data->infifo_ind--;
+
+    return k;
+}
+
+void flush_vt(Device *vt) {
+    if(vt == NULL || vt->type != DEV_VIRT_TERM) {
+        return;
+    }
+
+    VTDeviceData* data = (VTDeviceData*) vt->data;
+    memset(data->text, 0, data->textlen);
+    data->textind = 0;
+}

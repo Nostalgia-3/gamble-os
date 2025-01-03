@@ -5,6 +5,36 @@
 #include <vga.h>
 #include <str.h>
 
+#define CON_SYSTEM_RESET    1
+#define CON_A20_GATE        2
+#define CON_SECOND_PS2_CLK  4
+#define CON_SECOND_PS2_DATA 8
+// Output buffer full with byte from first PS/2 port (connected to IRQ1)
+#define CON_OUT_BUFF_PS2_1  16
+// 	Output buffer full with byte from second PS/2 port (connected to IRQ12, only if 2 PS/2 ports supported)
+#define CON_OUT_BUFF_PS2_2  32
+#define CON_FIRST_PS2_CLK   64
+#define CON_FIRST_PS2_DATA  128
+
+// This isn't all of them but I
+// basically just cherry picked
+// the ones I care about
+enum I8042Commands {
+    COM_READ_B0             = 0x20,
+    COM_DISABLE_SECOND_PS2  = 0xA7,
+    COM_ENABLE_SECOND_PS2   = 0xA8,
+    COM_TEST_SECOND_PS2     = 0xA9,
+    COM_TEST_PS2_CONTROLLER = 0xAA,
+    COM_TEST_FIRST_PS2      = 0xAB,
+    COM_DISABLE_FIRST_PS2   = 0xAD,
+    COM_ENABLE_FIRST_PS2    = 0xAE,
+    COM_READ_CONTROLLER_OUT = 0xD0,
+    COM_WRITE_CONTROLLER_OUT= 0xD1,
+    COM_WRITE_TO_SECOND_PS2 = 0xD4,
+    COM_WRITE_CONFIG        = 0x60,
+    COM_RESET_CPU           = 0xFE
+};
+
 I8042_Status i8042_get_status() {
     union
     {
@@ -94,6 +124,12 @@ unsigned char kbdshift_scan1[128] = {
 #define KBD_SHIFT       0b00000100
 #define KBD_LOADED      0b10000000
 
+void flush_buf() {
+    while(i8042_get_status().output_buff_state != 0) {
+        i8042_get_byte();
+    };
+}
+
 // @TODO handle device B
 void I8042_DriverEntry(Device *dev) {
     Driver* driver = (Driver*)dev->data;
@@ -103,9 +139,7 @@ void I8042_DriverEntry(Device *dev) {
     bool device_a = TRUE;
 
     // Flush output buffer
-    while(i8042_get_status().output_buff_state != 0) {
-        i8042_get_byte();
-    };
+    flush_buf();
     I8042_Config conf = i8042_get_config(); // get controller config byte
     conf.first_ps2_int  = 0;
     conf.first_ps2_trans= 1;
@@ -128,30 +162,36 @@ void I8042_DriverEntry(Device *dev) {
     i8042_send_cont_comm(0xAB); // device #1 testing
     u8 resp = i8042_get_byte();
     if(resp != 0x00) {
-        puts("! I8042 dev #1 test failed\n");
+        // puts("! I8042 dev #1 test failed\n");
         device_a = FALSE;
     }
     // @TODO test device B (if possible)
     i8042_send_ack(0xFF);
     resp = i8042_get_byte(); // device #1 self-test
     if(resp != 0xAA) {
-        puts("! I8042 dev #1 BAT test failed\n");
+        // puts("! I8042 dev #1 BAT test failed\n");
         device_a = FALSE;
     }
     if(device_a) {
-        i8042_send_ack(0xF5);
+        flush_buf();
+        i8042_send_ack(0xF5); // disable scanning
         i8042_send_ack(0xF2); // Identify the device
+        io_wait();
+        io_wait();
         u16 device = i8042_get_byte();
+        if(device == 0xFA) device = i8042_get_byte();
         io_wait();
         io_wait();
         device |= inb(0x60) << 8;
+        io_wait();
+        io_wait();
 
         if((device&0xFF) == 0xAB) {
             Device* kbd = k_add_dev(dev->id, DEV_KEYBOARD, device);
 
             // Failed to add a device
             if(kbd == NULL) {
-                puts("Failed to add the PS/2 keyboard to the gdevt\n");
+                // puts("Failed to add the PS/2 keyboard to the gdevt\n");
                 kpanic();
             }
 
@@ -164,9 +204,9 @@ void I8042_DriverEntry(Device *dev) {
             conf.first_ps2_int = 1; // enable interrupts
             i8042_set_config(conf);
         } else {
-            puts("unkown ps/2 device: 0x");
-            puts(itoa(device, 16));
-            putc('\n');
+            // puts("unknown ps/2 device: 0x");
+            // puts(itoa(device, 16));
+            // putc('\n');
         }
     }
 }

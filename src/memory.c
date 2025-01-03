@@ -1,9 +1,7 @@
 #include "types.h"
 #include "memory.h"
 #include "math.h"
-
 #include "str.h"
-#include "vga.h"
 
 typedef struct _Allocation {
     u16 start;
