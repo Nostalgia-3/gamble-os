@@ -15,7 +15,7 @@ volatile u32 cursor = 0;
 #define DEBUG
 
 #ifdef DEBUG
-void putc_text(u8 c) {
+void putc_dbg(u8 c) {
     *(u8*)(0xB8000+((cursor+1)*2)-1) = 0x0F;
     *(u8*)(0xB8000+cursor*2) = c;
     cursor++;
@@ -64,7 +64,7 @@ __attribute__((noreturn)) void kpanic() {
     // play_sound(1000);
     // wait(100);
     // nosound();
-    putc_text('!');
+    putc_dbg('k');
     __asm__ volatile ("cli\n" "hlt":);
     while(1);
 }
@@ -119,7 +119,7 @@ void _init_gdevt() {
     // standard keyboard output
     Device *kbd = k_add_dev(KERNEL_ID, DEV_KEYBOARD, 0);
     if(kbd == NULL) {
-        putc_text(':');
+        putc_dbg(':');
     }
 
     Device *stdvt = k_add_dev(KERNEL_ID, DEV_VIRT_TERM, 0);
@@ -132,10 +132,10 @@ void _init_gdevt() {
                 vtdata->textlen = 3000;
             }
         } else {
-            putc_text('%');
+            putc_dbg('%');
         }
     } else {
-        putc_text('^');
+        putc_dbg('^');
     }
 }
 
@@ -169,7 +169,7 @@ Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code) {
 
     // no free devices
     if(id == 0) {
-        putc_text('@');
+        putc_dbg('@');
         return NULL;
     }
 
@@ -204,6 +204,9 @@ Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code) {
             if(gdevt[ind].data == NULL) return NULL;
             memset(gdevt[ind].data, 0, sizeof(VTDeviceData));
         break;
+
+        // case DEV_MOUSE:
+        // break;
 
         default:
             // puts("Device #");

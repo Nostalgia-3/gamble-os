@@ -1,8 +1,9 @@
 [bits 16]
 [org 0x7C00]
 
-reset:
-    xor ax, ax
+start:
+    cli
+    mov ax, cs
     mov ds, ax
     mov ss, ax
     mov es, ax
@@ -10,7 +11,6 @@ reset:
     mov sp, bp
 
     push dx
-
 load_second_stage:
     mov si, second_stage_dpack
     mov ah, 0x42
@@ -18,7 +18,6 @@ load_second_stage:
     jc disk_error
     pop dx
     jmp 0x7E00
-
 finish:
     jmp $
 
@@ -36,7 +35,6 @@ second_stage_dpack:
     dw 0        ; memory page
     dd 1        ; starting block
     dd 0        ; (only used for big reads)
-
 
 times 510 - ($-$$) db 0
 dw 0xAA55

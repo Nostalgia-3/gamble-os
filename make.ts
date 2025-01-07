@@ -7,19 +7,16 @@ import path from 'node:path';
 const LD = `ld`;
 const GCC = `gcc`;
 
-const MBR           = 'build/mbr.bin';      // The first 512 bytes of the bootloader
-const SECOND_STAGE  = 'build/second.bin';   // The next 2KiB of the bootloader
-const EL_TOR        = 'build/eltor.img';    // The full bootloader (combines MBR + SECOND_STAGE + ISO9660 padding)
-const KERNEL        = 'build/kernel.bin';   // The kernel loaded into the output ISO
-const BOOT          = 'build/gambleos-{BUILD-INDEX}.iso';
-const LINKER_SCRIPT = 'linker.ld';
+const MBR               = 'build/mbr.bin';      // The first 512 bytes of the bootloader
+const SECOND_STAGE      = 'build/second.bin';   // The next 2KiB of the bootloader
+const KERNEL            = 'build/kernel.bin';   // The kernel loaded into the output ISO
+const BOOT              = 'build/gambleos-{BUILD-INDEX}.img';
+const LINKER_SCRIPT     = 'linker.ld';
 
-const MAX_KERNEL_SIZE = 1024*500;           // This is accurate enough
+const MAX_KERNEL_SIZE   = 1024*500;             // This is accurate enough
+const FILE_SIZE         = 1024;                 // Size of the output .img file in 512-byte sectors (512KiB)
 
-const FILE_SIZE     = 512*1024;             // 512KiB
-
-const BIN_SIZE      = 5*512;                // data
-const INCLUDE       = 'include';
+const INCLUDE           = 'include';
 
 if(Deno.args[0] == 'listen') {
     m.startExServer();
@@ -58,7 +55,7 @@ if(Deno.args[0] == 'listen') {
             c,
             Deno.readTextFileSync(c).replaceAll('<MAKE::BUILD_INDEX>', build_index.toString())
         );
-        m.call(`${GCC} -I ${INCLUDE} -O2 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
+        m.call(`${GCC} -I ${INCLUDE} -O1 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
     }
 
     const files: string[] = [];
@@ -79,20 +76,15 @@ if(Deno.args[0] == 'listen') {
     
     console.log(`kernel size: ${fKERNEL.length} bytes (bytes remaining: ${MAX_KERNEL_SIZE - fKERNEL.length})`);
 
-    // Remove the thing
-
-    const fBOOT = new Uint8Array(BIN_SIZE);
+    const fBOOT = new Uint8Array(FILE_SIZE*512);
     fBOOT.set(fMBR);
     fBOOT.set(fSECOND, fMBR.length);
-
-    Deno.writeFileSync(EL_TOR, fBOOT);
-
+    fBOOT.set(fKERNEL, fMBR.length+fSECOND.length);
+    
     const outFile   = BOOT.replaceAll('{BUILD-INDEX}', build_index.toString());
 
-    m.call(`xorriso -as mkisofs -graft-points -c sys/bootcat -boot-load-size 5 -o ${outFile} sys/kernel.bin=${KERNEL}`);
+    Deno.writeFileSync(outFile, fBOOT);
 
-    // Write the EL_TOR to the first 32KiB of the ISO
-    m.call(`dd if=${EL_TOR} of=${outFile} conv=notrunc status=progress`);
 
     if(!existsSync('disk.img')) {
         m.call(`qemu-img create disk.img 512M`);

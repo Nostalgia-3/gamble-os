@@ -59,15 +59,15 @@ void *k_malloc(size_t size) {
             }
 
             char *ret = itoa(MEM_BASE+BLOCK_SIZE*st, 16);
-            putc_text('[');
-            for(int i=0;i<strlen(ret);i++) putc_text(ret[i]);
-            putc_text(']');
+            putc_dbg('[');
+            for(int i=0;i<strlen(ret);i++) putc_dbg(ret[i]);
+            putc_dbg(']');
 
             return (void*)(MEM_BASE+BLOCK_SIZE*st);
         }
     }
 
-    putc_text('/');
+    putc_dbg('/');
     
     return NULL;
 }

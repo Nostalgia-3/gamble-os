@@ -30,7 +30,7 @@ static idtr_t idtr;
 static bool vectors[IDT_MAX_DESCRIPTORS];
 
 void exception_handler(u8 d) {
-    putc_text('E');
+    putc_dbg('E');
     
     __asm__ volatile (
         "cli\n hlt":

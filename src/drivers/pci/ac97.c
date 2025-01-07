@@ -1,5 +1,6 @@
 #include <drivers/pci/ac97.h>
 #include <gosh.h>
+#include <memory.h>
 #include <types.h>
 #include <port.h>
 
@@ -83,6 +84,17 @@
 #define SDM         0x80
 
 static Driver driver = { .name = "AC97.DRV", .DriverEntry=AC97_DriverEntry, .DriverInt=AC97_DriverInt };
+static bool headphones_connected;
+
+typedef struct _AC97BufferEntry {
+ u32 sample_memory;
+ u16 number_of_samples;
+ u16 reserved: 14;
+ u8  last_buffer_entry: 1;
+ u8  interrupt_on_completion: 1;
+}__attribute__((packed)) AC97BufferEntry;
+
+AC97BufferEntry *buf_mem;
 
 PCIDriver get_ac97_driver() {
     return (PCIDriver) {
@@ -120,6 +132,23 @@ void AC97_DriverEntry(Device *dev) {
     outw(nam + RESET, 0xFF);
 
     // @TODO make this
+    headphones_connected = FALSE;
+    if((inw(nam + CAPABILITIES) & 0x10) == 0x10 && inw(nam + AUX_OUT_VOL) == 0x8000) {
+        headphones_connected = TRUE;
+    }
+
+    // Disable PCM volume
+    outw(nam + PCM_OUT_VOL, 0);
+
+    buf_mem = k_malloc(sizeof(AC97BufferEntry)*32);
+
+    u16 ex_capabilities = inw(nam + EX_AUDIO);
+    if((ex_capabilities & 0x01) == 0x01) {
+        // Enable variable sample rate
+        outw(nam + EX_AUDIO_CTRL, 0x01);
+    }
+
+    outl(nabm + PO_BDBAR, (u32)buf_mem);
 
     // kprintf("int pin = %u, int line = %u\n", header.interrupt_pin, header.interrupt_line);
     // kprintf("PO_SR = %04X\n", inw((u16)(nabm) + PO_SR));

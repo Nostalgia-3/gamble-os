@@ -14,6 +14,15 @@
 #define MAX_PACKET32 0
 #define MAX_PACKET64 1
 
+#define USBCMD              0x00
+#define USBSTS              0x02
+#define USBINTR             0x04
+#define FRNUM               0x06
+#define FRBASEADD           0x08
+#define SOFMOD              0x0C
+#define PORTSC1             0x10
+#define PORTSC2             0x12
+
 typedef struct _UHCI_IO {
     u16 usbcmd;
     u16 usbsts;

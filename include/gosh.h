@@ -66,11 +66,7 @@ enum DeviceType {
 
 /************************************ MISC ************************************/
 
-void putc_text(u8 c);
-
-// Waits approximately ms milliseconds, give or take a few microseconds due to
-// hardware variation (I'll do better I swear)
-void wait(u32 ms);
+void putc_dbg(u8 c);
 
 // Play a sound via the PC speaker (very loud)
 void play_sound(u32 nFrequence);
@@ -120,6 +116,14 @@ typedef struct _KeyboardDeviceData {
     u8 fifo[32];
     u8 fifo_ind;
 } KeyboardDeviceData;
+
+typedef struct _MouseDeviceData {
+    u8 buttons_down;
+    u16 x;
+    u16 y;
+
+    void (*update_handler)(Device *dev);
+} MouseDeviceData;
 
 typedef struct _FBDeviceData {
     /* The width of the framebuffer */
@@ -371,5 +375,24 @@ void    close(fd_t fd);
 int     pread(fd_t fd, void *buf, size_t count, off_t offset);
 // Write count bytes to fd at offset from buf
 int     pwrite(fd_t fd, void *buf, size_t count, off_t offset);
+
+/************************************ TIME ************************************/
+
+typedef enum TaskType {
+    // Task is called repeatedly
+    TASK_TYPE_PERIODIC_INTERRUPT,
+    // Task is called once after some amount of time
+    TASK_TYPE_SINGLE_INTERRUPT
+} TaskType_t;
+
+// Waits some amount of milliseconds. This is blocking
+void    wait(u32 ms);
+
+// Create a task, with a type and millisecond, returning the ID of the task, or
+// -1 if it failed to create a task
+int     add_task(void (*handler), TaskType_t type, u32 ms);
+
+// Free the task with the id passed
+void    free_task(int id);
 
 #endif
