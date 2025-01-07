@@ -64,14 +64,49 @@ load_kernel:
 
     ; get the root directory
     mov si, curbuf+156
-    call parse_dir_entry
+    ; "open" the directory by loading the contents
+.load_root_dir:
+    add si, 2               ; skip length and extra attribute record length
+    mov eax, [si]           ; get the location of the internal directory
+    shl eax, 2              ; multiply by four to get 512-byte sectors
+    mov [iso_start], eax    ; put the starting address into the data pack
+    xor eax, eax
+    mov si, iso_boot_dapack
+    mov ah, 0x42
+    mov dl, 0x80            ; don't hardcode this
+    int 0x13
+    jc disk_error
+    xor ax, ax
+    mov si, curbuf
+.search_for_sys:
+    mov al, [si]            ; check length
+    cmp al, 0               ; if zero...
+    je load_kernel_err      ; then we couldn't find it
+    add si, 32
 
-    mov ecx, 3 ; length(SYS)
-    call scan_inside_dir
-    jc load_kernel_err
+    xor bx, bx
+    mov bl, [si]            ; check name length
+    add si, bx
+    push bx
+    and bl, 1
+    cmp bl, 0
+    jne .padding_bit
+.check_name:
+    pop bx
+    cmp bl, 3               ; check if the name is 3 bytes long
+    jne .next_entry
 
     mov si, yay
     call print
+    jmp $
+
+.padding_bit:
+    add si, 1
+    jmp .check_name
+.next_entry:
+    ; sub al, 33 ; subtract the amount we've already added
+    ; add si, ax
+    jmp .search_for_sys
 
     jmp $
 
@@ -173,46 +208,10 @@ parse_dir_entry:
     mov [curdir_strlen], al
     ret
 
-; scan the inside of the loaded directory for a directory entry with
-; a specified length (strings coming soon)
-; params:
-;   ecx = strlen
-; returns:
-;   carry flag (set if failed)
-;   (if found) curdir set to the found dir entry
-scan_inside_dir:
-    push eax
-    push ebx
-    push ecx
-    mov edx, [curdir_addr]
-    shl edx, 2 ; multiply by 4 (get the actual sector)
-    xor bx, bx
-    add bx, [curdir_len]
-.loop:
-    ; load the data into memory
-    mov [iso_start], edx
-    mov si, iso_boot_dapack
-    mov eax, 0x4200
-    mov dl, 0x80 ; don't hardcode this
-    int 0x13
-    jc disk_error
-    clc
-
-    mov si, curbuf
-    add si, bx
-    call parse_dir_entry
-    jc .failed
-    cmp ecx, [curdir_strlen]
-    je .done
-
-    add bx, [curdir_len]
-.failed:
-    stc
-.done:
-    pop eax
-    pop ebx
-    pop ecx
-    ret
+not_found:
+    mov si, failed_loading_kernel
+    call print
+    jmp $
 
 ; print a string
 print:
