@@ -1,7 +1,12 @@
 [bits 32]
 extern _start
-push DWORD ecx
-push DWORD edx
-call _start
-; add esp, 8
+
+mov eax, _start
+cmp eax, 0
+jne boot
 jmp $
+
+boot:
+    call _start
+done:
+    jmp $

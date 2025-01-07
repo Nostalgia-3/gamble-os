@@ -1,3 +1,4 @@
+#include <gosh.h>
 #include "types.h"
 #include "memory.h"
 #include "math.h"
@@ -11,6 +12,11 @@ typedef struct _Allocation {
 static u8 blocks[MAX_BLOCKS/8];
 
 static Allocation allocs[MAX_ALLOCS];
+
+void init_mem() {
+    memset(blocks, 0, sizeof(blocks));
+    memset(allocs, 0, sizeof(allocs));
+}
 
 void set_block_used(u32 block, bool used) {
     if(used) blocks[block/8] |= (1 << (block % 8));
@@ -27,6 +33,7 @@ void push_alloc(u16 start, u16 length) {
         if(allocs[i].length == 0) {
             allocs[i].start = start;
             allocs[i].length = length;
+            break;
         }
     }
 }
@@ -45,15 +52,22 @@ void *k_malloc(size_t size) {
         } else {
             p++;
         }
-
+        
         if(p == blocks_req) {
             for(int x=0;x<p;x++) {
                 set_block_used(st+x, TRUE);
             }
 
+            char *ret = itoa(MEM_BASE+BLOCK_SIZE*st, 16);
+            putc_text('[');
+            for(int i=0;i<strlen(ret);i++) putc_text(ret[i]);
+            putc_text(']');
+
             return (void*)(MEM_BASE+BLOCK_SIZE*st);
         }
     }
+
+    putc_text('/');
     
     return NULL;
 }
@@ -61,7 +75,7 @@ void *k_malloc(size_t size) {
 void k_free(void *mem) {
     if(mem == NULL) return;
 
-    u32 start = ((size_t)mem - MEM_BASE)/BLOCK_SIZE;
+    u16 start = ((size_t)mem - MEM_BASE)/BLOCK_SIZE;
 
     for(int i=0;i<MAX_ALLOCS;i++) {
         if(allocs[i].start == start && allocs[i].length != 0) {
@@ -70,6 +84,7 @@ void k_free(void *mem) {
             }
             allocs[i].start = 0;
             allocs[i].length = 0;
+            break;
         }
     }
 }

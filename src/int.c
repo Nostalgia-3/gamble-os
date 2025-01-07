@@ -3,6 +3,7 @@
 #include "int.h"
 #include "types.h"
 
+#include <gosh.h>
 #include <port.h>
 
 #define PIC1            0x20        /* IO base address for master PIC */
@@ -29,9 +30,7 @@ static idtr_t idtr;
 static bool vectors[IDT_MAX_DESCRIPTORS];
 
 void exception_handler(u8 d) {
-    // puts("Exception #");
-    // puts(itoa(d, 10));
-    // puts(" called\n");
+    putc_text('E');
     
     __asm__ volatile (
         "cli\n hlt":

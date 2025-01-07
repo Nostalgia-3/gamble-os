@@ -21,17 +21,8 @@ u32 atoi(char*);
 // Convert an ascii base-16 number to an int
 u32 hatoi(char*);
 
-inline bool is_printable(u8 c) {
-    return (c >= 32 && c <= 126) ? TRUE : FALSE;
-}
-
-inline bool is_digit(u8 c) {
-    return (c >= '0' && c <= '9') ? TRUE : FALSE;
-}
-
-inline bool is_hex(u8 c) {
-    return ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) ? TRUE : FALSE;
-}
+#define is_printable(c) (((c) >= 32 && (c) <= 126) ? TRUE : FALSE)
+#define is_digit(c) (((c) >= '0' && (c) <= '9') ? TRUE : FALSE)
 
 size_t strlen(char *s1);
 

@@ -25,7 +25,9 @@ enum FB_PixelFormat {
     /* An 8-bit index to a palette (ex. linear 320x200) */
     PixelFormat_LINEAR_I8,
     /* A 4-bit index to a palette (ex. planar 640x480) */
-    PixelFormat_RGB_I4
+    PixelFormat_PLANAR_I4,
+    /* Technically not a pixel format; used for compatibility reasons */
+    PixelFormat_TEXT_640x480
 };
 
 enum Key {
@@ -64,6 +66,8 @@ enum DeviceType {
 
 /************************************ MISC ************************************/
 
+void putc_text(u8 c);
+
 // Waits approximately ms milliseconds, give or take a few microseconds due to
 // hardware variation (I'll do better I swear)
 void wait(u32 ms);
@@ -73,14 +77,14 @@ void play_sound(u32 nFrequence);
 // Stop playing a sound on the PC speaker
 void nosound();
 
+// Reset the CPU, basically restarting the machine for other devices
+void reset_cpu();
+
 /* Cause a kernel panic, halting all operations on the CPU */
 void kpanic();
 
 // The Kernel's unique ID
 #define KERNEL_ID 0x8008
-
-// The lookback KBD that contains input from all keyboards
-#define LOOPBACK_KBD 1
 
 /********************************** KEYBOARD **********************************/
 
@@ -158,6 +162,11 @@ typedef struct _DriveDeviceData {
 
 typedef FBDeviceData FBInfo;
 
+typedef struct _Connection {
+    u8 type; // This is zero for PCI and one for USB
+    
+} Connection;
+
 // Initialize the global device table. Don't call this unless you know what
 // you're doing.
 void _init_gdevt();
@@ -200,6 +209,8 @@ typedef struct _Driver {
     void (*DriverEntry)(Device *dev);
     // Called when a registered interrupt is called
     void (*DriverInt)(Device *dev, u8 int_id);
+    // Called when a PCI/USB device is connected
+    void (*DriverConnection)(Device *driver, Connection conn);
     // Called when the driver is destroyed (the system closes, in most cases)
     void (*DriverEnd)();
 } Driver;
@@ -220,6 +231,17 @@ bool k_register_int(Driver *driver, u8 int_id);
 
 /************************************ PCIE ************************************/
 
+#define PCI_IO_SPACE        (1 << 0)    // R/W
+#define PCI_MEM_SPACE       (1 << 1)    // R/W
+#define PCI_BUS_MASTER      (1 << 2)    // R/W
+#define PCI_SPEC_CYCLES     (1 << 3)    // RO
+#define PCI_MEM_INVAL_EN    (1 << 4)    // RO
+#define PCI_VGA_PAL_SNOOP   (1 << 5)    // RO
+#define PCI_PARITY_ERR_RESP (1 << 6)    // R/W
+#define PCI_SERR_ENABLE     (1 << 8)    // R/W
+#define PCI_BTB_ENABLE      (1 << 9)    // RO
+#define PCI_INT_DISABLE     (1 << 10)   // R/W
+
 #define PCI_MASS_STORAGE_CONTROLLER 0x01
 #define PCI_IDE_CONTROLLER          0x01
 
@@ -238,12 +260,34 @@ typedef struct _PCIHeader {
     u8 BIST;
 } PCIHeader;
 
+typedef struct _GenPCIHeader {
+    u32 bar0, bar1, bar2, bar3, bar4, bar5;
+    u32 cis_pointer;
+    u16 subsystem_id;
+    u16 subsystem_vendor_id;
+    u32 expansion_rom_addr;
+    u8  capabilities_pointer;
+    u8  max_latency;
+    u8  min_grant;
+    u8  interrupt_pin;
+    u8  interrupt_line;
+} GenPCIHeader;
+
 // Read a config register, returning a value
 PCIHeader pci_get_header(u8 bus, u8 slot);
+GenPCIHeader pci_get_gen_header(u8 bus, u8 slot);
 
 u16 pci_read_config(u8 bus, u8 slot, u8 func, u8 offset);
 
+u32 pci_read_config32(u8 bus, u8 slot, u8 func, u8 offset);
+void pci_write_config32(u8 bus, u8 slot, u8 func, u8 offset, u32 data);
+
 u16 scan_pci(u16 class, u16 subclass);
+
+void pci_set_comm(u16 command, u8 bus, u8 slot);
+void pci_unset_comm(u16 command, u8 bus, u8 slot);
+
+u16  pci_get_comm(u8 bus, u8 slot);
 
 /******************************** FRAME BUFFER ********************************/
 
@@ -270,6 +314,8 @@ void    fb_draw_char(Device *fb, u16 x, u16 y, u8 c, u32 color);
 void    fb_clear(Device* fb, u32 color);
 
 /****************************** VIRTUAL TERMINAL ******************************/
+
+Device *stdvt();
 
 // Write a character to the virtual terminal's stdout, without updating the
 // virtual terminal
@@ -304,5 +350,26 @@ void    flush_vt(Device *vt);
 // Read a sector from a drive drive, and write it to data
 bool    read_sector(Device *drive, u32 sector, u8* data);
 bool    write_sector(Device *drive, u32 sector, u8* data);
+
+/***************************** VIRTUAL FILESYSTEM *****************************/
+
+typedef i32 fd_t;
+typedef i64 off_t;
+
+// scan a drive for any filesystems, adding them to the vfs at path if there are
+// valid partitions found. Returns zero if failed
+bool    mount_drive(Device *drive, char* path);
+
+// Open a file at a specified path, returning the file descriptor, or an error
+// if it failed to open
+fd_t    open(char* path);
+
+// Close a file based on the file descriptor
+void    close(fd_t fd);
+
+// Read count bytes from fd at offset to buf
+int     pread(fd_t fd, void *buf, size_t count, off_t offset);
+// Write count bytes to fd at offset from buf
+int     pwrite(fd_t fd, void *buf, size_t count, off_t offset);
 
 #endif

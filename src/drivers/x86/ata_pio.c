@@ -1,8 +1,6 @@
 #include <gosh.h>
 #include <port.h>
-#include <vga.h>
-
-#include "ata_pio.h"
+#include "drivers/x86/ata_pio.h"
 
 // This driver is going to be REALLY mediocre, but for the bare minimum, idrc
 #define IO_BASE1            0x1F0
@@ -57,17 +55,6 @@
 
 #define MASTER_DRIVE 0xA0
 
-#define DATA_REG_OFF        0x0
-#define ERR_REG_OFF         0x1
-#define FEATURE_REG_OFF     0x1
-#define SECT_COUNT_REG_OFF  0x2
-#define LBA_LO_REG_OFF      0x3
-#define LBA_MID_REG_OFF     0x4
-#define LBA_HI_REG_OFF      0x5
-#define DRIVE_HEAD_REG_OFF  0x6
-#define STATUS_REG_OFF      0x7
-#define CMD_REG_OFF         0x7
-
 #define READ_SECTORS_EXT  0x24
 
 #define ERR  0x1   // Indicates an error occurred. Send new cmd to clear
@@ -116,12 +103,51 @@ void soft_reset(u16 ctrl_base) {
     outb(ctrl_base, 0b00000000);    // set bit 2 (=0x02) to disable ints
 }
 
+// Drive should either be 0 ("master") or 1 ("slave")
+u8 select_drive(u16 base, u8 drive) {
+    u8 mask = BSY | DRQ | ERR;
+
+    u8 status = inb(base + IO_STATUS_REG);
+    if (status & mask) {
+        return 2;
+    }
+
+    // Already selected, nothing to do
+    if (drive == CURRENT_DRIVE) {
+        return 1;
+    }
+
+    // Select drive, then delay 400ns
+    outb(base + IO_DRIVE_SEL_REG, 0xA0 | drive % 2);
+    for(int i=0;i<4;i++) {
+        inb(base);
+    }
+
+    // Read the Status register to clear pending interrupts
+    // Ignore value
+    inb(base + IO_STATUS_REG);
+
+    // Read Status register one more time, use this to determine status
+    status = inb(base + IO_STATUS_REG);
+
+    if(status & mask) {
+        kprintf("Error: Drive select failed\n");
+        return 0;
+    }
+    
+    CURRENT_DRIVE = drive;
+    return 1;
+}
+
+
 #include <str.h>
-ATADevice detect_devtype(u16 base, u8 ch) {
+ATADevice detect_devtype(u16 base, u8 channel) {
     ATADevice dev;
     dev.exists = FALSE;
 
-    outb(base + IO_DRIVE_SEL_REG, 0xA0 | ch << 4);
+    select_drive(base, channel);
+
+    outb(base + IO_DRIVE_SEL_REG, 0xA0 | channel << 4);
     io_wait();
     outb(base + IO_LBA_LOW_REG, 0);
     io_wait();
@@ -154,7 +180,7 @@ ATADevice detect_devtype(u16 base, u8 ch) {
             type = IDE_ATAPI;
         else {
             kprintf("Unknown device type (LBAmid=%X, LBAhi=%X)\n", LBAmid, LBAhi);
-            soft_reset(ch);
+            soft_reset(channel);
             return dev;
         }
         outb(base + IO_COMMAND_REG, (u8)(ATA_CMD_IDENTIFY_PACKET));
@@ -165,7 +191,7 @@ ATADevice detect_devtype(u16 base, u8 ch) {
         }
         if(error) {
             // puts("Unexpected error on drive\n");
-            soft_reset(ch);
+            soft_reset(channel);
             return dev;
         }
     }
@@ -191,48 +217,6 @@ ATADevice detect_devtype(u16 base, u8 ch) {
     }
 
     return dev;
-}
-
-u8 select_drive(u8 drive) {
-    u16 bus = IO_BASE1;
-    if(bus > 1) bus = IO_BASE2;
-
-    u8 status;
-
-    // No matter which drive is requested, we first must check the
-    // status of the currently selected drive to make sure that it
-    // is not actively modifying status
-    status = inb(bus + STATUS_REG_OFF);
-    u8 mask = BSY | DRQ | ERR;
-    if (status & mask) {
-        return 0;
-    }
-
-    // Already selected, nothing to do
-    if (drive == CURRENT_DRIVE) {
-        return 1;
-    }
-
-    // Select drive, then delay 400ns
-    outb(bus + DRIVE_HEAD_REG_OFF, drive);
-    for(int i=0;i<4;i++) {
-        inb(CTRL_BASE1);
-    }
-
-    // Read the Status register to clear pending interrupts
-    // Ignore value
-    inb(bus + STATUS_REG_OFF);
-
-    // Read Status register one more time, use this to determine status
-    status = inb(bus + STATUS_REG_OFF);
-
-    if(status & mask) {
-        kprintf("Drive select failed\n");
-        return 0;
-    }
-    
-    CURRENT_DRIVE = drive;
-    return 1;
 }
 
 u8 ata_wait(u16 bus, u8 flag, u8 mode) {
@@ -278,37 +262,38 @@ void check_PIO_status(u16 alt_bus) {
     }
 }
 
-void ATAPIO_read_sector(Device *dev, u32 block, u8 *addr) {
-    if(!select_drive(dev->code %2)) return;
-    
+void ATAPIO_read_sector(Device *dev, u32 block, u8 *addr) {    
     u16 base = IO_BASE1;
     if(dev->code > 1) base = IO_BASE2;
 
-    outb(base + DRIVE_HEAD_REG_OFF, LBA_MODE);
+    outb(base + IO_DRIVE_SEL_REG, 0xE0 | (dev->code%2)<<4);
 
     // Sectorcount high byte
-    outb(base + SECT_COUNT_REG_OFF, (1 >> 8) & 0xFF);
+    outb(base + IO_SECTOR_COUNT_REG, (1 >> 8) & 0xFF);
+    io_wait();
+    io_wait();
+    io_wait();
+    io_wait();
 
     // LBA bytes 4, 5, 6
-    outb(base + LBA_LO_REG_OFF, (block >> 24) & 0xFF);
-    outb(base + LBA_MID_REG_OFF, (0) & 0xFF);
-    outb(base + LBA_HI_REG_OFF, (0 >> 8) & 0xFF);
+    outb(base + IO_LBA_LOW_REG, (block >> 24) & 0xFF);
+    outb(base + IO_LBA_MID_REG, (0) & 0xFF);
+    outb(base + IO_LBA_HI_REG, (0 >> 8) & 0xFF);
 
     // Sectorcount low byte
-    outb(base + SECT_COUNT_REG_OFF, (1) & 0xFF);
+    outb(base + IO_SECTOR_COUNT_REG, (1) & 0xFF);
 
     // LBA bytes 1, 2, 3
-    outb(base + LBA_LO_REG_OFF, (block) & 0xFF);
-    outb(base + LBA_MID_REG_OFF, (block >> 8) & 0xFF);
-    outb(base + LBA_HI_REG_OFF, (block >> 16) & 0xFF);
+    outb(base + IO_LBA_LOW_REG, (block) & 0xFF);
+    outb(base + IO_LBA_MID_REG, (block >> 8) & 0xFF);
+    outb(base + IO_LBA_HI_REG, (block >> 16) & 0xFF);
 
     // Read sectors command
-    outb(base + CMD_REG_OFF, READ_SECTORS_EXT);
+    outb(base + IO_COMMAND_REG, READ_SECTORS_EXT);
 
     if(ata_wait(base+0x206, DRQ, ATA_WAIT)) {
-        u16 data[256];
         for(int i=0;i<256;i++) {
-            ((u16*)data)[i] = inw(base + DATA_REG_OFF);
+            ((u16*)addr)[i] = inw(base + IO_DATA_REG);
         }
     }
 }
@@ -320,6 +305,14 @@ void ATAPIO_write_sector(Device *dev, u32 sector, u8 *addr) {
 #include <str.h>
 #include <memory.h>
 void ATA_DriverEntry(Device *dev) {
+    if(inb(IO_BASE1 + IO_STATUS_REG) == 0xFF) {
+        kprintf("Error: IO bus #1 has no drives\n");
+    }
+
+    if(inb(IO_BASE2 + IO_STATUS_REG) == 0xFF) {
+        kprintf("Error: IO bus #2 has no drives\n");
+    }
+
     ATADevice d1 = detect_devtype(IO_BASE1, 0);
     ATADevice d2 = detect_devtype(IO_BASE1, 1);
     ATADevice d3 = detect_devtype(IO_BASE2, 0);
@@ -335,7 +328,6 @@ void ATA_DriverEntry(Device *dev) {
         data->write_sector = ATAPIO_write_sector;
         data->sectors = d1.size/512;
         data->sector_size = 512;
-        kprintf("d1 model = %s\nsize = %u\n", d1.model, d1.size);
     }
 
     if(d2.exists && d2.size > 0) {
@@ -348,7 +340,6 @@ void ATA_DriverEntry(Device *dev) {
         data->write_sector = ATAPIO_write_sector;
         data->sectors = d2.size/512;
         data->sector_size = 512;
-        kprintf("d2 model = %s\nsize = %u\n", d2.model, d2.size);
     }
 
     if(d3.exists && d3.size > 0) {
@@ -361,7 +352,6 @@ void ATA_DriverEntry(Device *dev) {
         data->write_sector = ATAPIO_write_sector;
         data->sectors = d3.size/512;
         data->sector_size = 512;
-        kprintf("d3 model = %s\nsize = %u\n", d3.model, d3.size);
     }
 
     if(d4.exists && d4.size > 0) {
@@ -374,7 +364,6 @@ void ATA_DriverEntry(Device *dev) {
         data->write_sector = ATAPIO_write_sector;
         data->sectors = d4.size/512;
         data->sector_size = 512;
-        kprintf("d4 model = %s\nsize = %u\n", d4.model, d4.size);
     }
 
     k_register_int((Driver*)dev->data, IRQ_FIRST_BUS);

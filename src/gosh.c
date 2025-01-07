@@ -8,8 +8,21 @@ Device* gdevt;
 u32 gdevt_len = 0;
 
 volatile u32 d_id = 0;
+volatile u32 cursor = 0;
 
 /************************************ MISC ************************************/
+
+#define DEBUG
+
+#ifdef DEBUG
+void putc_text(u8 c) {
+    *(u8*)(0xB8000+((cursor+1)*2)-1) = 0x0F;
+    *(u8*)(0xB8000+cursor*2) = c;
+    cursor++;
+}
+#else
+void putc_text(u8 c) {}
+#endif
 
 // This is blatantly wrong and mildly disgusting (erego, perfect!)
 // (io_wait() takes ~1-4 microseconds; assume it runs at 1 microsecond)
@@ -23,22 +36,23 @@ void wait(u32 ms) {
     }
 }
 
+// Bare minimum function that you probably shouldn't use
 void play_sound(u32 nFrequence) {
- 	u32 Div;
- 	u8 tmp;
+ 	// u32 Div;
+ 	// u8 tmp;
  
-    //Set the PIT to the desired frequency
- 	Div = 1193180 / nFrequence;
- 	outb(0x43, 0xb6);
- 	outb(0x42, (u8) (Div) );
- 	outb(0x42, (u8) (Div >> 8));
+    // //Set the PIT to the desired frequency
+ 	// Div = 1193180 / nFrequence;
+ 	// outb(0x43, 0xb6);
+ 	// outb(0x42, (u8) (Div) );
+ 	// outb(0x42, (u8) (Div >> 8));
  
-    //And play the sound using the PC speaker
- 	tmp = inb(0x61);
-  	if (tmp != (tmp | 3)) {
- 		outb(0x61, tmp | 3);
- 	}
- }
+    // //And play the sound using the PC speaker
+ 	// tmp = inb(0x61);
+  	// if (tmp != (tmp | 3)) {
+ 	// 	outb(0x61, tmp | 3);
+ 	// }
+}
  
 //make it shut up
 void nosound() {
@@ -46,10 +60,11 @@ void nosound() {
     outb(0x61, tmp);
 }
 
-void kpanic() {
-    play_sound(1000);
-    wait(500);
-    nosound();
+__attribute__((noreturn)) void kpanic() {
+    // play_sound(1000);
+    // wait(100);
+    // nosound();
+    putc_text('!');
     __asm__ volatile ("cli\n" "hlt":);
     while(1);
 }
@@ -95,7 +110,7 @@ u8 getc() {
 
 void _init_gdevt() {
     if(gdevt != NULL) return;
-    gdevt_len = 256;
+    gdevt_len = 128;
     gdevt = k_malloc(sizeof(Device)*gdevt_len);
     memset((void*)gdevt, 0, sizeof(Device)*gdevt_len);
     for(int i=0;i<gdevt_len;i++)
@@ -103,16 +118,25 @@ void _init_gdevt() {
 
     // standard keyboard output
     Device *kbd = k_add_dev(KERNEL_ID, DEV_KEYBOARD, 0);
-    if(kbd == NULL) kpanic();
+    if(kbd == NULL) {
+        putc_text(':');
+    }
 
     Device *stdvt = k_add_dev(KERNEL_ID, DEV_VIRT_TERM, 0);
-    if(stdvt == NULL) kpanic();
-    VTDeviceData* vtdata = stdvt->data;
-    if(vtdata == NULL) kpanic();
-    vtdata->text = k_malloc(5000);
-    if(vtdata->text == NULL) kpanic();
-    memset(vtdata->text, 0, 5000);
-    vtdata->textlen = 5000;
+    if(stdvt != NULL) {
+        VTDeviceData* vtdata = stdvt->data;
+        if(vtdata != NULL) {
+            vtdata->text = k_malloc(3000);
+            if(vtdata->text != NULL) {
+                memset(vtdata->text, 0, 3000);
+                vtdata->textlen = 3000;
+            }
+        } else {
+            putc_text('%');
+        }
+    } else {
+        putc_text('^');
+    }
 }
 
 Device* get_gdevt() {
@@ -145,6 +169,7 @@ Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code) {
 
     // no free devices
     if(id == 0) {
+        putc_text('@');
         return NULL;
     }
 
@@ -207,7 +232,7 @@ Device* k_get_device_by_owner(u32 owner, enum DeviceType type) {
 
 Device* k_get_device_by_id(u32 id, enum DeviceType type) {
     for(u32 i=0;i<gdevt_len;i++) {
-        if(gdevt[i].id == id && (type == DEV_UNKNOWN || gdevt[i].type == type)) return &gdevt[i];
+        if(i == id && (type == DEV_UNKNOWN || gdevt[i].type == type)) return &gdevt[i];
     }
 
     return NULL;
@@ -286,11 +311,38 @@ u16 pci_read_config(u8 bus, u8 slot, u8 func, u8 offset) {
     return tmp;
 }
 
+u32 pci_read_config32(u8 bus, u8 slot, u8 func, u8 offset) {
+    // This is mostly copied from https://wiki.osdev.org/PCI
+    u32 address;
+    u32 lbus  = (u32)bus;
+    u32 lslot = (u32)slot;
+    u32 lfunc = (u32)func;
+    u16 tmp = 0;
+  
+    // Write out the address
+    outl(0xCF8, (u32)((lbus << 16) | (lslot << 11) | (lfunc << 8) | (offset & 0xFC) | ((u32)0x80000000)));
+    return inl(0xCFC);
+}
+
+void pci_write_config32(u8 bus, u8 slot, u8 func, u8 offset, u32 data) {
+    // This is mostly copied from https://wiki.osdev.org/PCI
+    u32 address;
+    u32 lbus  = (u32)bus;
+    u32 lslot = (u32)slot;
+    u32 lfunc = (u32)func;
+    u16 tmp = 0;
+  
+    // Write out the address
+    outl(0xCF8, (u32)((lbus << 16) | (lslot << 11) | (lfunc << 8) | (offset & 0xFC) | ((u32)0x80000000)));
+    outl(0xCFC, data);
+}
+
 PCIHeader pci_get_header(u8 bus, u8 slot) {
     PCIHeader header;
 
     header.vendor           = pci_read_config(bus, slot, 0, 0);
     header.device           = pci_read_config(bus, slot, 0, 2);
+    header.command          = pci_read_config(bus, slot, 0, 4);
     header.status           = pci_read_config(bus, slot, 0, 6);
     u16 byte                = pci_read_config(bus, slot, 0, 8);
     header.rev_id           = byte & 0xFF;
@@ -308,6 +360,41 @@ PCIHeader pci_get_header(u8 bus, u8 slot) {
     return header;
 }
 
+GenPCIHeader pci_get_gen_header(u8 bus, u8 slot) {
+    GenPCIHeader header;
+
+    if(pci_read_config(bus, slot, 0, 0) == 0xFFFF) return header;
+
+    header.bar0 = pci_read_config(bus, slot, 0, 0x10)
+                | (pci_read_config(bus, slot, 0, 0x12) << 16);
+    header.bar1 = pci_read_config(bus, slot, 0, 0x14)
+                | (pci_read_config(bus, slot, 0, 0x16) << 16);
+    header.bar2 = pci_read_config(bus, slot, 0, 0x18)
+                | (pci_read_config(bus, slot, 0, 0x1A) << 16);
+    header.bar3 = pci_read_config(bus, slot, 0, 0x1C)
+                | (pci_read_config(bus, slot, 0, 0x1E) << 16);
+    header.bar4 = pci_read_config(bus, slot, 0, 0x20)
+                | (pci_read_config(bus, slot, 0, 0x22) << 16);
+    header.bar5 = pci_read_config(bus, slot, 0, 0x24)
+                | (pci_read_config(bus, slot, 0, 0x26) << 16);
+    
+    header.cis_pointer          = pci_read_config(bus, slot, 0, 0x28) | (pci_read_config(bus, slot, 0, 0x2A) << 16);
+    header.subsystem_vendor_id  = pci_read_config(bus, slot, 0, 0x2C);
+    header.subsystem_id         = pci_read_config(bus, slot, 0, 0x2E);
+    header.expansion_rom_addr   = pci_read_config(bus, slot, 0, 0x28) | (pci_read_config(bus, slot, 0, 0x30) << 16);
+
+    header.capabilities_pointer = pci_read_config(bus, slot, 0, 0x2C) & 0xFF;
+
+    u16 byte = pci_read_config(bus, slot, 0, 0x3C);
+    header.interrupt_line       = byte & 0xFF;
+    header.interrupt_pin        = (byte >> 8) & 0xFF;
+    byte = pci_read_config(bus, slot, 0, 0x3E);
+    header.min_grant            = byte & 0xFF;
+    header.max_latency          = (byte >> 8) & 0xFF;
+    
+    return header;
+}
+
 u16 scan_pci(u16 class, u16 subclass) {
     for(u8 i=0;i<255;i++) {
         for(u8 x=0;x<32;x++) {
@@ -317,6 +404,18 @@ u16 scan_pci(u16 class, u16 subclass) {
     }
     
     return 0xFFFF;
+}
+
+void pci_set_comm(u16 command, u8 bus, u8 slot) {
+    pci_write_config32(bus, slot, 0, 4, pci_read_config32(bus, slot, 0, 4) | command);
+}
+
+void pci_unset_comm(u16 command, u8 bus, u8 slot) {
+    pci_write_config32(bus, slot, 0, 4, pci_read_config32(bus, slot, 0, 4) & ~command);
+}
+
+u16  pci_get_comm(u8 bus, u8 slot) {
+    return pci_read_config(bus, slot, 0, 4);
 }
 
 /******************************** FRAME BUFFER ********************************/
@@ -486,16 +585,22 @@ void fb_draw_pixel(Device *fb, u16 x, u16 y, u32 color) {
 
     if(x > info->w || y > info->h) return;
 
+    // no pixels on text :(
+    if(info->format == PixelFormat_TEXT_640x480) return;
+
     if(info->format == PixelFormat_LINEAR_I8) {
         *(u8*)(info->buffer + x+y*info->w) = (u8)color;
-    } else if(info->format == PixelFormat_RGB_I4) {
+    } else if(info->format == PixelFormat_PLANAR_I4) {
         u16 bit = x%8;
         u16 byte = ((x-bit)+y*640)/8;
 
-        *(u8*)(info->buffer + ((x)+y*info->w)/8 + 0x00000) |= ((u8)color & 1 ? 1 : 0) << (8-(x%8+1));
-        *(u8*)(info->buffer + ((x)+y*info->w)/8 + 0x0FFFF) |= ((u8)color & 2 ? 1 : 0) << (8-(x%8+1));
-        *(u8*)(info->buffer + ((x)+y*info->w)/8 + 0x1FFFE) |= ((u8)color & 4 ? 1 : 0) << (8-(x%8+1));
-        *(u8*)(info->buffer + ((x)+y*info->w)/8 + 0x2FFFD) |= ((u8)color & 8 ? 1 : 0) << (8-(x%8+1));
+        outb(0x3C4, 2); // mask register
+        if(color == 0)
+            outb(0x3C5, 0b1111);
+        else
+            outb(0x3C5, (color) | 1);
+
+        *(u8*)(info->buffer + ((x)+y*info->w)/8) |= (1) << (8-(x%8+1));
     }
 
     if(info->buf_update) info->buf_update();
@@ -507,36 +612,31 @@ void fb_draw_rect(Device* fb, u16 x, u16 y, u16 w, u16 h, u32 color) {
     FBInfo* info = (FBInfo*)fb->data;
     if(info == NULL) return;
 
+    // no pixels on text :(
+    if(info->format == PixelFormat_TEXT_640x480) return;
+
     if(info->format == PixelFormat_LINEAR_I8) {
         for(u16 iy=0;iy<h;iy++) {
             for(u16 ix=0;ix<w;ix++) {
                 *(u8*)((info->buffer)+(ix+x)+((iy+y)*info->w)) = (color);
             }
         }
-    } else if(info->format == PixelFormat_RGB_I4) {
+    } else if(info->format == PixelFormat_PLANAR_I4) {
+        outb(0x3C4, 2); // mask register
+        if(color == 0)
+            outb(0x3C5, 0b1111);
+        else
+            outb(0x3C5, color); // + 0x0FFFF
+
         for(u16 iy=0;iy<h;iy++) {
             for(u16 ix=0;ix<w;ix++) {
                 u8 bit = (1) << (8-((x+ix)%8+1));
+                u32 byte = ((x+ix)+(y+iy)*info->w)/8;
 
-                if(color & 1)
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x00000) |= bit;
+                if(color)
+                    *(u8*)(info->buffer + (byte)) |= bit;
                 else
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x00000) &= ~bit;
-                
-                if(color & 2)
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x0FFFF) |= bit;
-                else
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x0FFFF) &= ~bit;
-                
-                if(color & 4)
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x1FFFE) |= bit;
-                else
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x1FFFE) &= ~bit;
-                
-                if(color & 8)
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x2FFFD) |= bit;
-                else
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8 + 0x2FFFD) &= ~bit;
+                    *(u8*)(info->buffer + (byte)) &= ~bit;
             }
         }
     }
@@ -546,10 +646,23 @@ void fb_draw_rect(Device* fb, u16 x, u16 y, u16 w, u16 h, u32 color) {
 
 void fb_draw_char(Device *fb, u16 x, u16 y, u8 c, u32 color) {
     if(fb == NULL) return;
-    for(u8 ix=0;ix<8;ix++) {
-        for(u8 iy=0;iy<8;iy++) {
-            if(font8x8_basic[c][iy] & (1 << ix))
-                fb_draw_pixel(fb, x+ix, y+iy, color);
+    
+    FBInfo* info = (FBInfo*)fb->data;
+    if(info == NULL) return;
+
+    if(info->format == PixelFormat_TEXT_640x480) {
+        // this is harcoded to be 8x8 glyphs
+        // *(u8*)(0xB8000) = '?';
+        if(c != '\n') {
+            *(u8*)(info->buffer+((x+y*info->w)/8)*2) = c;
+            *(u8*)(info->buffer+((x+y*info->w)/8)*2+1) = (u8)color;
+        }
+    } else {
+        for(u8 ix=0;ix<8;ix++) {
+            for(u8 iy=0;iy<8;iy++) {
+                if(font8x8_basic[c][iy] & (1 << ix))
+                    fb_draw_pixel(fb, x+ix, y+iy, color);
+            }
         }
     }
 }
@@ -564,9 +677,28 @@ void fb_clear(Device *fb, u32 color) {
         for(int i=0;i<info->w*info->h;i++) {
             *(u8*)(info->buffer+i) = (u8)color;
         }
-    } else if(info->format == PixelFormat_RGB_I4) {
-        for(int i=0;i<info->w*info->h/8;i++) {
-            *(u8*)(info->buffer+i) = (u8)color;
+    } else if(info->format == PixelFormat_PLANAR_I4) {
+        outb(0x3C4, 2); // mask register
+        if(color == 0)
+            outb(0x3C5, 0b1111);
+        else
+            outb(0x3C5, color | 1);
+
+        for(u16 iy=0;iy<info->h;iy++) {
+            for(u16 ix=0;ix<info->w;ix++) {
+                u8 bit = (1) << (8-((ix)%8+1));
+                u32 byte = ((ix)+(iy)*info->w)/8;
+
+                if(color)
+                    *(u8*)(info->buffer + (byte) + 0x00000) |= bit;
+                else
+                    *(u8*)(info->buffer + (byte) + 0x00000) &= ~bit;
+            }
+        }
+    } else if(info->format == PixelFormat_TEXT_640x480) {
+        for(u16 i=0;i<info->w*info->h;i++) {
+            *(u8*)(info->buffer + i*2) = 0x00;
+            *(u8*)(info->buffer + i*2+1) = 0x0F;
         }
     }
 
@@ -574,6 +706,10 @@ void fb_clear(Device *fb, u32 color) {
 }
 
 /****************************** VIRTUAL TERMINAL ******************************/
+
+Device *stdvt() {
+    return k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
+}
 
 void putcnoup(Device *vt, u8 key) {
     VTDeviceData* data = (VTDeviceData*) vt->data;
@@ -1114,4 +1250,118 @@ void flush_vt(Device *vt) {
     VTDeviceData* data = (VTDeviceData*) vt->data;
     memset(data->text, 0, data->textlen);
     data->textind = 0;
+}
+
+/*********************************** DRIVES ***********************************/
+
+// Read a sector from a drive drive, and write it to data
+bool read_sector(Device *drive, u32 sector, u8* data) {
+    if(drive != NULL || !drive->is_active || drive->type != DEV_DRIVE) return FALSE;
+    
+    DriveDeviceData* d = (DriveDeviceData*)drive->data;
+
+    if(d->read_sector)
+        d->read_sector(drive, sector, data);
+}
+
+bool write_sector(Device *drive, u32 sector, u8* data) {
+    if(drive != NULL || !drive->is_active || drive->type != DEV_DRIVE) return FALSE;
+    
+    DriveDeviceData* d = (DriveDeviceData*)drive->data;
+
+    if(d->write_sector)
+        d->write_sector(drive, sector, data);
+}
+
+/***************************** VIRTUAL FILESYSTEM *****************************/
+
+typedef struct _BPB {
+    u8  jmp[3];             // should be equal to 0xEB, a byte, and 0x90
+    u8  oem[8];             // OEM identifier
+    u16 bytes_per_sector;   // Bytes per sector
+    u8  secs_per_cluster;   // Sectors per cluster
+    u16 reserved_sectors;   // Reserved sectors
+    u8  fats_count;         // # of FATs on the medium
+    u16 rootdir_entries;    // # of root directory entries
+    u16 total_secs;         // Total sectors (determines FAT type)
+    u8  media_desc_type;    // type of media
+    u16 secs_per_fat;       // Sectors per fat
+    u16 secs_per_track;     // Sectors per track
+    u16 heads_in_media;     // Number of heads
+    u32 num_hidden_secs;    // Number of hidden sectors
+    u32 large_sec_count;    // Large sector count
+
+    // FAT32
+    u32 secsperfat;         // Sectors per FAT
+    u16 flags;              // Flags
+    u16 fat_version;        // FAT version number
+    u32 cluster_root;       // The cluster number of the root directory.
+    u16 fsinfo_sec;         // FSInfo sector
+    u16 sec_backup_boot;    // Backup boot sector
+    u8 resv[12];            // These should all be zero
+    u8 drivenum;            // Drive number (0x00 = floppy, 0x80 = harddisk)
+    u8 ntflags;             // Reserved (NT flags)
+    u8 signature;           // Should be 0x28 or 0x29
+    u32 volume_serial_num;  // Serial number
+    u8 volume_label[11];    // Volume label, padded with spaces
+    u8 sysiden[8];          // Always "FAT32    ", but ignore
+    u8 bootcode[420];       // Ignore data here
+    u16 bootable_signature; // 0xAA55
+} BPB;
+
+typedef i32 fd_t;
+typedef i64 off_t;
+
+fd_t create_st() {
+
+}
+
+bool mount_drive(Device *drive, char* path) {
+    if(drive == NULL || !drive->is_active || drive->type != DEV_DRIVE) return FALSE;
+
+    DriveDeviceData* d = (DriveDeviceData*)drive->data;
+    if(d == NULL || !d->read_sector) return FALSE;
+
+    kprintf("sizeof(BPB) = %u\n", sizeof(BPB));
+
+    // I'm hardcoding FAT32 at the only partition on the drive
+    BPB * bpb = (BPB *)k_malloc(d->sector_size);
+    if(bpb == NULL) return FALSE;
+    d->read_sector(drive, 0, (u8*)bpb);
+
+    if(bpb->jmp[0] != 0xEB || bpb->jmp[2] != 0x90) goto fail;
+    if(bpb->total_secs != 0) goto fail;
+
+    for(int i=0;i<8;i++) {
+        putc_vt(stdvt(), bpb->oem[i]);
+    }
+    putc_vt(stdvt(), '\n');
+
+    // kprintf("sector count: %u\n", bpb->large_sec_count);
+    for(int i=0;i<11;i++) {
+        putc_vt(stdvt(), bpb->volume_label[i]);
+    }
+    putc_vt(stdvt(), '\n');
+
+    k_free(bpb);
+    return TRUE;
+fail:
+    k_free(bpb);
+    return FALSE;
+}
+
+// Open a file at a specified path, returning the file descriptor, or an error
+// if it failed to open
+fd_t open(char* path) {
+
+}
+
+// Read count bytes from fd at offset to buf
+int pread(fd_t fd, void *buf, size_t count, off_t offset) {
+
+}
+
+// Write count bytes to fd at offset from buf
+int pwrite(fd_t fd, void *buf, size_t count, off_t offset) {
+
 }

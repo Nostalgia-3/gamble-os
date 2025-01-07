@@ -1,3 +1,11 @@
+## Default QEMU Options
+
+8086:1237   440FX - 82441FX PMC [Natoma]
+8086:7000   82371SB PIIX3 ISA [Natoma/Triton II]
+1234:1111   Generic QEMU Video Card
+8086:100E   82540EM Gigabit Ethernet Controller
+8086:2415   82801AA AC'97 Audio Controller
+
 ## T480
 
 8086:5914   Xeon E3-1200 v6/7th Gen Core Processor Host Bridge/DRAM Registers

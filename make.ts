@@ -7,24 +7,34 @@ import path from 'node:path';
 const LD = `ld`;
 const GCC = `gcc`;
 
-const MBR = 'build/mbr.bin';
-const KERNEL = 'build/kernel.bin';
-const BOOT = 'build/gambleos-{BUILD-INDEX}.bin';
+const MBR           = 'build/mbr.bin';      // The first 512 bytes of the bootloader
+const SECOND_STAGE  = 'build/second.bin';   // The next 2KiB of the bootloader
+const EL_TOR        = 'build/eltor.img';    // The full bootloader (combines MBR + SECOND_STAGE + ISO9660 padding)
+const KERNEL        = 'build/kernel.bin';   // The kernel loaded into the output ISO
+const BOOT          = 'build/gambleos-{BUILD-INDEX}.iso';
 const LINKER_SCRIPT = 'linker.ld';
 
-// const BIN_SIZE = 1048576;
-const BIN_SIZE = 524288; // 512KiB
+const MAX_KERNEL_SIZE = 1024*500;           // This is accurate enough
 
-const INCLUDE = 'include';
+const FILE_SIZE     = 512*1024;             // 512KiB
+
+const BIN_SIZE      = 5*512;                // data
+const INCLUDE       = 'include';
 
 if(Deno.args[0] == 'listen') {
     m.startExServer();
 } else {
-    Deno.removeSync('build', { recursive: true });
+    let { build_index }: {
+        build_index: number
+    } = JSON.parse(Deno.readTextFileSync('make.json'));
 
-    if(!existsSync('build')) {
-        Deno.mkdirSync('build');
+    build_index++;
+
+    if(existsSync('build')) {
+        Deno.removeSync('build', { recursive: true });
     }
+
+    Deno.mkdirSync('build');
 
     if(!existsSync('make.json')) {
         Deno.writeTextFileSync('make.json', JSON.stringify({
@@ -32,17 +42,13 @@ if(Deno.args[0] == 'listen') {
         }));
     }
 
-    let { build_index }: {
-        build_index: number
-    } = JSON.parse(Deno.readTextFileSync('make.json'));
-    
     const assemblyFiles: string[] = m.scanDir('src/', /\.asm$/, /^s\_/).sort((a,b)=>a.charCodeAt(0)-b.charCodeAt(0));
     const cFiles: string[] = m.scanDir('src/', /\.c$/);
 
     console.log(`[BUILD INDEX] ${build_index}`);
     
-    // hardcode the MBR because it's like one file
     m.call(`nasm src/boot/s_main.asm -fbin -o ${MBR}`);
+    m.call(`nasm src/boot/s_second.asm -fbin -o ${SECOND_STAGE}`);
     
     for(const asm of assemblyFiles)
         m.call(`nasm ${asm} -felf -o build/${m.ext(m.base(asm), '.asm.o')}`);
@@ -52,7 +58,7 @@ if(Deno.args[0] == 'listen') {
             c,
             Deno.readTextFileSync(c).replaceAll('<MAKE::BUILD_INDEX>', build_index.toString())
         );
-        m.call(`${GCC} -I ${INCLUDE} -O1 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
+        m.call(`${GCC} -I ${INCLUDE} -O2 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
     }
 
     const files: string[] = [];
@@ -69,27 +75,47 @@ if(Deno.args[0] == 'listen') {
     
     const fMBR = Deno.readFileSync(MBR);
     const fKERNEL = Deno.readFileSync(KERNEL);
+    const fSECOND = Deno.readFileSync(SECOND_STAGE);
     
-    console.log(`kernel size: ${fKERNEL.length} bytes (bytes remaining: ${BIN_SIZE - fMBR.length - fKERNEL.length})`);
+    console.log(`kernel size: ${fKERNEL.length} bytes (bytes remaining: ${MAX_KERNEL_SIZE - fKERNEL.length})`);
 
-    const fBOOT = new Uint8Array(BIN_SIZE); // 4MiB
+    // Remove the thing
+
+    const fBOOT = new Uint8Array(BIN_SIZE);
     fBOOT.set(fMBR);
-    fBOOT.set(fKERNEL, fMBR.length);
+    fBOOT.set(fSECOND, fMBR.length);
 
-    build_index++;
-    
-    Deno.writeFileSync(BOOT.replaceAll('{BUILD-INDEX}', build_index.toString()), fBOOT);
+    Deno.writeFileSync(EL_TOR, fBOOT);
+
+    const outFile   = BOOT.replaceAll('{BUILD-INDEX}', build_index.toString());
+
+    m.call(`xorriso -as mkisofs -graft-points -c sys/bootcat -boot-load-size 5 -o ${outFile} sys/kernel.bin=${KERNEL}`);
+
+    // Write the EL_TOR to the first 32KiB of the ISO
+    m.call(`dd if=${EL_TOR} of=${outFile} conv=notrunc status=progress`);
+
+    if(!existsSync('disk.img')) {
+        m.call(`qemu-img create disk.img 512M`);
+    }
 
     // update the .make.json
     Deno.writeTextFileSync('make.json', JSON.stringify({
         build_index
     }));
 
-    if(!existsSync('disk.img')) {
-        // should be raw, idk though
-        m.call(`qemu-img create disk.img 512M`);
-    }
+    // -device usb-tablet,bus=usb-bus.0 -device usb-storage,bus=ehci.0,drive=usbstick
+    const qemu = [
+        // Primary drive
+        `-drive file=${outFile},format=raw,media=disk,index=0`,
+        // Secondary drive
+        `-drive file=./disk.img,format=raw,media=disk,index=1`,
+        // AC97 audio card
+        `-audio driver=sdl,model=ac97,id=speaker`,
+        // PC Speaker
+        `-machine pcspk-audiodev=speaker`,
+        // RAM
+        `-m 1G`
+    ];
 
-    // '172.25.112.1' (leaving this here) Deno.args[1]
-    m.exCall(`qemu-system-i386 -drive file=${BOOT.replaceAll('{BUILD-INDEX}', build_index.toString())},format=raw,media=disk -drive file=disk.img,format=raw,media=disk -m 1G -monitor stdio -audiodev sdl,id=speaker -machine pcspk-audiodev=speaker`, Deno.args[0]);
+    m.exCall(`qemu-system-i386 ${qemu.join(' ')} -monitor stdio`, Deno.args[0]);
 }

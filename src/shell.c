@@ -1,10 +1,14 @@
 // Generic shell program for testing
-
+#include <shell.h>
 #include <gosh.h>
 #include <types.h>
 #include <str.h>
 #include <memory.h>
 #include <math.h>
+
+#include <port.h>
+
+#include <drivers/x86/vga.h>
 
 struct MemoryEntry {
     u32 base1;
@@ -67,6 +71,10 @@ static Device *vt;
 
 static u8 running = TRUE;
 
+static u32 prevind = 0;
+
+static bool in_color = FALSE;
+
 void clear_screen() {
     fb_clear(fb, 0);
     curx = 0;
@@ -75,16 +83,30 @@ void clear_screen() {
 }
 
 void putc(u8 c) {
-    kprintfnoup("%c", c);
+    if(in_color) {
+        cur_color = c;
+        in_color = FALSE;
+    } else if(c == '\x1b') {
+        in_color = TRUE;
+    } else {
+        kprintfnoup("%c", c);
+    }
 }
 
 void puts(u8 *ch) {
     for(int i=0;i<strlen(ch);i++) {
-        fb_draw_char(fb, curx*8, cury*8, ch[i], (u32)cur_color);
-        curx++;
-        if(curx >= WIDTH || ch[i] == '\n') {
-            curx = 0;
-            cury++;
+        if(in_color) {
+            cur_color = ch[i];
+            in_color = FALSE;
+        } else if(ch[i] == '\x1b') {
+            in_color = TRUE;
+        } else {
+            fb_draw_char(fb, curx*8, cury*8, ch[i], (u32)cur_color);
+            if(is_printable(ch[i])) curx++;
+            if(curx >= WIDTH || ch[i] == '\n') {
+                curx = 0;
+                cury++;
+            }
         }
     }
 }
@@ -127,15 +149,16 @@ void hexdump(u8* addr, u32 size) {
 }
 
 void draw_cursor(u8 set) {
-    fb_draw_rect(fb, curx*8, cury*8+6, 8, 2, set ? cur_color : 0);
+    if(((FBInfo*)fb->data)->format == PixelFormat_TEXT_640x480)
+        vga_set_cursor(curx, cury);
+    else
+        fb_draw_rect(fb, curx*8, cury*8+6, 8, 2, set ? cur_color : 0);
 }
 
 void draw(u8 *text) {
     clear_screen();
     puts(text);
 }
-
-static u32 prevind = 0;
 
 // Called whenever any text is written to the virtual terminal
 void shell_write(Device *vt) {
@@ -157,6 +180,7 @@ void shell_write(Device *vt) {
             }
 
             fb_draw_rect(fb, curx*8, cury*8, 8, 8, 0);
+            fb_draw_char(fb, curx*8, cury*8, ' ', 0x0F);
         }
     } else {
         draw(dev->text);
@@ -169,7 +193,20 @@ void shell_write(Device *vt) {
 void run_command(u32 mem) {
     u8* comm = strtok(cmdbfr, ' ');
 
-    if(strcmp("list", comm) == 0) {
+    if(strcmp("", comm) == 0) {
+    } else if(strcmp("help", comm) == 0) {
+        kprintfnoup("Commands:\n");
+        kprintfnoup("  list    <pci | mem | stats>  list tables of data\n");
+        kprintfnoup("  cls                          clears the terminal\n");
+        kprintfnoup("  color   <color>              set the foreground text color\n");
+        kprintfnoup("  hexdump <addr> <count>       hexdump count bytes at addr\n");
+        kprintfnoup("  lsdevs                       list all registered devices\n");
+        kprintfnoup("  read    <did> <sec> <addr>   Read a sector from a drive\n");
+        kprintfnoup("  mount   <drive> <st:path>    Mount a drive\n");
+        kprintfnoup("  malloc  <size>               Allocate memory and output the address\n");
+        kprintfnoup("  hreset                       Hard restart\n");
+        update(stdvt());
+    } else if(strcmp("list", comm) == 0) {
         comm = strtok(NULL, ' ');
         if(strcmp("pci", comm) == 0) {
             puts("PCI Devices:\n");
@@ -188,7 +225,7 @@ void run_command(u32 mem) {
             }
         } else if(strcmp("mem", comm) == 0) {
             for(u16 i=0;i<mem;i++) {
-                struct MemoryEntry* e = (struct MemoryEntry*)(0x7E00);
+                struct MemoryEntry* e = (struct MemoryEntry*)(0x1000);
                 kprintfnoup("0x%08X%08X | 0x%08X%08X | %u\n", e[i].base2, e[i].base1, e[i].len2, e[i].len1, e[i].type);
             }
         } else if(strcmp("stats", comm) == 0) {
@@ -204,8 +241,6 @@ void run_command(u32 mem) {
         flush_vt(vt);
         clear_screen();
         kprintf("> ");
-    } else if(strcmp("help", comm) == 0) {
-        kprintf("Commands:\n  list <pci | mem | stats> - list tables of data\n  cls - clears the terminal\n  hexdump <addr> <size> - output int <size> bytes at hex <addr>\n");
     } else if(strcmp("color", comm) == 0) {
         comm = strtok(NULL, ' ');
         if(strlen(comm) == 0) {
@@ -236,37 +271,97 @@ void run_command(u32 mem) {
             if(!devs[i].is_active) continue;
             kprintf("Device(%d) = %s\n", i, DEVTYPE_ST[devs[i].type]);
         }
-    } else if(strcmp("fyou", comm) == 0) {
-        for(u32 i=0;i<0x10000*4;i++)
-            *(u8*)(0xA0000+i) = (u32)fibonacci_lfsr();
-    } else if(strcmp("", comm) == 0) {
+    } else if(strcmp("read", comm) == 0) {
+        comm = strtok(NULL, ' ');
+        u32 did = atoi(comm);
+        comm = strtok(NULL, ' ');
+        u32 sector = hatoi(comm);
+        comm = strtok(NULL, ' ');
+        u32 addr = hatoi(comm);
+        Device *dev = k_get_device_by_id(did, DEV_UNKNOWN);
+        if(dev == NULL || addr == NULL) {
+            kprintf("Format: read <int:drive id> <hex:sector> <hex:addr>\n");
+        }
 
+        DriveDeviceData* d = (DriveDeviceData*)dev->data;
+        if(d->read_sector) {
+            d->read_sector(dev, sector, (u8*)addr);
+            kprintf("Read one sector.\n");
+        } else {
+            kprintf("Drive has no read_sector() function!\n");
+        }
+    } else if(strcmp("mount", comm) == 0) {
+        comm = strtok(NULL, ' ');
+        u32 did = atoi(comm);
+        if(strcmp(comm, "") == 0) {
+            kprintf("Format: mount <int: id> <string: path>\n");
+            return;
+        }
+
+        comm = strtok(NULL, ' ');
+        if(strcmp(comm, "") == 0) {
+            kprintf("Format: mount <int: id> <string: path>\n");
+            return;
+        }
+
+        if(!mount_drive(k_get_device_by_id(did, DEV_UNKNOWN), comm)) {
+            kprintf("Mounting failed.\n");
+        }
+    } else if(strcmp("malloc", comm) == 0) {
+        comm = strtok(NULL, ' ');
+        u32 did = hatoi(comm);
+        if(did == 0) {
+            kprintf("Format: malloc <hex:size>\n");
+        } else {
+            kprintf("address: %X\n", k_malloc(did));
+        }
+    } else if(strcmp("hreset", comm) == 0) {
+        reset_cpu();
+    } else if(strcmp("sb16detect", comm) == 0) {
+        // reset DSP
+        outb(0x226, 1);
+        io_wait();
+        outb(0x226, 0);
+        u16 l = 0xFFFF; // this is for slow SBs
+        while(l != 0) {
+            if(inb(0x22E) >> 7) {
+                kprintf("output = 0x%X (expected 0xAA)\n", inb(0x22A));
+                break;
+            }
+            l--;
+        }
     } else {
         kprintf("Unknown command \"%s\"\n", comm);
     }
-
-    for(int x=0;x<ind;x++) cmdbfr[x] = 0;
-    ind = 0;
 }
 
 int shell_main(u32 mem) {
     fb = fb_get(RESOLUTION);
     if(fb == NULL) return 1;
 
-    WIDTH = ((FBDeviceData*)fb->data)->w/8;
+    if(((FBInfo*)fb->data)->format == PixelFormat_TEXT_640x480) {
+        WIDTH = ((FBDeviceData*)fb->data)->w;
+    } else {
+        WIDTH = ((FBDeviceData*)fb->data)->w/8;
+    }
 
-    vt = k_get_device_by_type(DEV_VIRT_TERM);
+    vt = stdvt();
     if(vt == NULL) return 1;
 
-    // Assume that the colors are the 320x200 @ 256 color palette
+    VTDeviceData *vtd = vt->data;
+    vtd->write_handler = shell_write;
+
+    const char* prompt = "\x1b\x0EShell\x1b\x0F>";
+
     clear_screen();
-    kprintf("> ");
+
+    kprintf("-= \x1b\x03GaOs \x1b\x0EShell\x1b\x0F v1.0 =-\n");
+    kprintf("%s\x1b%c ", prompt, cur_color);
 
     while(running) {
         u8 sc = scanc();
         if(sc == '\b') {
             if(ind != 0) {
-                // curx--;
                 ind--;
                 putc_vt(vt, sc);
                 cmdbfr[ind] = '\0';
@@ -274,8 +369,9 @@ int shell_main(u32 mem) {
         } else if(sc == '\n') {
             putc_vt(vt, sc);
             run_command(mem);
+            for(int x=0;x<ind;x++) cmdbfr[x] = 0;
             ind = 0;
-            if(running) kprintf("> ");
+            if(running) kprintf("%s\x1b%c ", prompt, cur_color);
         } else {
             if(ind > sizeof(cmdbfr)) continue;
             putc_vt(vt, sc);

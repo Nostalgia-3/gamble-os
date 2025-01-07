@@ -4,7 +4,7 @@ STARTUP(build/a_kernel-entry.asm.o)
 
 SECTIONS
 {
-  . = 0x8000;
+  . = 0x9000;
   .text : ALIGN(CONSTANT(MAXPAGESIZE)) {
 _TEXT_START_ = .;
     *(.text)

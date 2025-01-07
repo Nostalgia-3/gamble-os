@@ -5,6 +5,6 @@
 #include <types.h>
 
 void shell_write(Device *vt);
-int shell_main();
+int shell_main(u32 mem);
 
 #endif

@@ -6,55 +6,66 @@
 #include <memory.h>
 #include <int.h>
 
-#include <ata_pio.h>
-#include <i8042.h>
-#include <vga.h>
+#include <drivers/x86/ata_pio.h>
+#include <drivers/x86/i8042.h>
+#include <drivers/x86/vga.h>
 
+#include <drivers/pci.h>
+
+#include <drivers/pci/ac97.h>
+#include <drivers/pci/uhci.h>
 
 void irq_handler(u32 i) {
     k_handle_int((u8)i+0x20);
 }
 
 void syscall_handler() {
-    // putc('S');
+    kprintf("syscall\n");
 }
 
 #include <shell.h>
 
-// the 0 is a macro that gets filled in by `make.ts`
-#define VERSION "0.0.0b1"
+typedef struct _KData {
+    u8 boot_drive;
+    u8 selected_video_mode;
+    u16 mem_size;
+} KData;
 
-void _start(u8 boot, u32 mem) {
-    Driver DriverATA_PIO    = { .name = "ATA.DRV", .DriverEntry = ATA_DriverEntry, .DriverInt = ATA_DriverInt };
-    Driver DriverI8042      = { .name = "I8042.DRV", .DriverEntry = I8042_DriverEntry, .DriverInt = I8042_DriverInt };
-    Driver DriverVGA        = { .name = "VGA.DRV", .DriverEntry = VGA_DriverEntry };
+void _start() {
+    KData *kd = (KData*)0x500;
 
-    // Test if the kernel is in C
-    play_sound(80);
-    while(1);
+    init_mem();
 
-    play_sound(440);
-    kprintf("Debug Build v" VERSION " (built with gcc v" __VERSION__ ")\n");
-    play_sound(220);
+    k_malloc(sizeof(Device));
+
     _init_gdevt();
-    play_sound(440);
+    if(get_gdevt() == NULL)
+        kpanic();
     idt_init();
-    play_sound(220);
+    initialize_pci();
+
+    // Harcode some drivers for testing
+    Driver DriverVGA        = { .name = "VGA.DRV", .DriverEntry = VGA_DriverEntry, .data = (void*)(u32)kd->selected_video_mode };
+    Driver DriverI8042      = { .name = "I8042.DRV", .DriverEntry = I8042_DriverEntry, .DriverInt = I8042_DriverInt };
+    Driver DriverATA_PIO    = { .name = "ATA.DRV", .DriverEntry = ATA_DriverEntry, .DriverInt = ATA_DriverInt };
+    Driver DriverPCI        = { .name = "PCI.DRV", .DriverEntry = PCI_DriverEntry };
+
+    PCIDriver uhci = get_uhci_driver();
+    PCIDriver ac97 = get_ac97_driver();
+
+    PCI_ADD(&uhci);
+    PCI_ADD(&ac97);
+
     load_driver(&DriverVGA);
-    play_sound(440);
     load_driver(&DriverI8042);
-    play_sound(220);
-    // load_driver(&DriverATA_PIO);
+    load_driver(&DriverATA_PIO);
+    load_driver(&DriverPCI); // This automatically loads drivers based on the connected PCI devices
 
     Device *fb = fb_get(RESOLUTION);
-    fb_draw_rect(fb, 0, 0, 32, 32, 7);
     if(fb == NULL || fb->data == NULL) kpanic();
-    fb_draw_rect(fb, 0, 0, 32, 32, 15);
 
     Device *vt = k_get_device_by_type(DEV_VIRT_TERM);
     if(vt == NULL || vt->data == NULL) kpanic();
-    VTDeviceData *vtd = vt->data;
-    vtd->write_handler = shell_write;
 
     if(!((u32)DriverI8042.data & 0b10000000)) {
         kprintf("Failed to initialize PS/2 keyboard and mouse :(\n");
@@ -62,14 +73,9 @@ void _start(u8 boot, u32 mem) {
         while(1);
     }
 
-    nosound();
-    if(shell_main(mem))
+    kprintf("Debug Build (built with gcc v" __VERSION__ ")\n");
+    if(shell_main(kd->mem_size))
         kpanic();
-    while(1);
-
-    bool running = TRUE;
-    u8 text_buf[80];
-    u8 index = 0;
 
     return;
 }
