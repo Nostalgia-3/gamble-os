@@ -81,8 +81,8 @@ load_kernel:
 .search_for_sys:
     mov al, [si]            ; check length
     cmp al, 0               ; if zero...
-    je load_kernel_err      ; then we couldn't find it
-    add si, 32
+    je .failed              ; then we couldn't find it
+    add si, 31
 
     xor bx, bx
     mov bl, [si]            ; check name length
@@ -104,17 +104,12 @@ load_kernel:
     add si, 1
     jmp .check_name
 .next_entry:
-    ; sub al, 33 ; subtract the amount we've already added
-    ; add si, ax
+    add si, 1
     jmp .search_for_sys
 
+.failed:
     jmp $
 
-    ; mov si, kern_dapack
-    ; mov ah, 0x42
-    ; mov dl, 0x80
-    ; int 0x13
-    ; jc disk_error
 boot_kernel:
     cli
     lgdt [gdt_descriptor]
@@ -248,7 +243,7 @@ hello: db "Video Modes", 13, 10, \
     " 2) 320x200    @ 256 Color", 13, 10, \
     " 3) 640x480    @ 16  Color", 13, 10, 0
 
-unknown:        db "Unknown command", 13, 10 0
+unknown:        db "Unknown command", 13, 10, 0
 failed_disk:    db "Failed to load the kernel from the disk!", 13, 10, 0
 failed_svga:    db "Failed to select an SVGA video mode!", 13, 10, 0
 end_list_err:   db "List ended without finding a valid option!", 13, 10, 0

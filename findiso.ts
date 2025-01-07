@@ -40,16 +40,14 @@ function searchDir(s: string, d: DirectoryEntry) {
     return dir;
 }
 
-function listDir(d: DirectoryEntry): string[] {
+function listDir(d: DirectoryEntry): Record<string,unknown>[] {
     let dir = d;
     let i = 0;
-    const files: string[] = [];
+    const files = [];
     let lba = d.lba;
     const dlen = d.dataLength;
     while(dir.len != 0) {
         currentSector = readSectors(lba*4, 4);
-        console.log(currentSector);
-        while(1);
 
         // f.subarray(lbs*lba+i, lbs*lba+dlen+i)
         dir = parseDirectoryEntry(currentSector, i);
@@ -58,7 +56,7 @@ function listDir(d: DirectoryEntry): string[] {
             break;
         }
 
-        files.push(translatePathName(dir.filename));
+        files.push({ name: translatePathName(dir.filename), len: dir.len });
         i+=dir.len;
     }
 
