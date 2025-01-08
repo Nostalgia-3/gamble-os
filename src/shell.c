@@ -335,6 +335,9 @@ void run_command(u32 mem) {
     }
 }
 
+char commandHistory[25][80];
+int commandHistoryLoc = 0;
+
 int shell_main(u32 mem) {
     fb = fb_get(RESOLUTION);
     if(fb == NULL) return 1;
@@ -359,24 +362,53 @@ int shell_main(u32 mem) {
     kprintf("%s\x1b%c ", prompt, cur_color);
 
     while(running) {
-        u8 sc = scanc();
-        if(sc == '\b') {
-            if(ind != 0) {
-                ind--;
-                putc_vt(vt, sc);
-                cmdbfr[ind] = '\0';
+        struct GlobalSC sc = scanc();
+
+        // u8 sc = scanc();
+        if (sc.extended){
+            char str[10];
+            // kprintf("--Extended Key Detected--\n");
+            // kprintf("key: %X\n",sc.sc);
+
+            if (sc.sc == 0x4B){
+                curx--;
+                draw_cursor(TRUE);
+                // Left Arrow
+            } else if (sc.sc == 0x4D) {
+                curx++;
+                draw_cursor(TRUE);
+                // Right Arrow
+            } else if (sc.sc == 0x48) {
+                // Up Arrow
+
+            } else if (sc.sc == 0x5C) {
+                // Down Arrow
             }
-        } else if(sc == '\n') {
-            putc_vt(vt, sc);
-            run_command(mem);
-            for(int x=0;x<ind;x++) cmdbfr[x] = 0;
-            ind = 0;
-            if(running) kprintf("%s\x1b%c ", prompt, cur_color);
+        
         } else {
-            if(ind > sizeof(cmdbfr)) continue;
-            putc_vt(vt, sc);
-            cmdbfr[ind++] = sc;
+            if(sc.sc == '\b') {
+                if(ind != 0) {
+                    ind--;
+                    putc_vt(vt, sc.sc);
+                    cmdbfr[ind] = '\0';
+                }
+            } else if(sc.sc == '\n') {
+                putc_vt(vt, sc.sc);
+                run_command(mem);
+                for(int x=0;x<ind;x++) cmdbfr[x] = 0;
+                ind = 0;
+
+                
+
+                if(running) kprintf("%s\x1b%c ", prompt, cur_color);
+            } else {
+                // kprintf("Key Pressed %X\n",sc);
+                if(ind > sizeof(cmdbfr)) continue;
+                putc_vt(vt, sc.sc);
+                cmdbfr[ind++] = sc.sc;
+            }
         }
+
     }
 
     return 0;
