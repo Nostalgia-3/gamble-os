@@ -1,4 +1,4 @@
-; thank GOD for godbolt
+; Godbolt was helpful here :)
 
 global inw
 inw:

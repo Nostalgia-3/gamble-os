@@ -4,11 +4,19 @@ GaOS is the supreme 32-bit operating system (technically kernel).
 
 ## Building
 
-GaOS needs at least GCC v12.2.0, ld v2.40, nasm v2.16.01, and deno v2.1.3. Once you have those installed, run `deno -A make.ts`, which creates `build/os.bin`
+GaOS needs at least GCC v12.2.0, LD v2.40, NASM v2.16.01, Deno v2.1.3, and optionally qemu-system-i386 v9.2.0 (although earlier versions of these programs will probably work). Once you have those installed, use the build tool (`make.ts`) to build it.
 
-## Todo 
+## Small To-Do List
 
-- [ ] Arrow keys to cycle throught past commands
-- [ ] Arrow keys to cycle between letters in the command bar
-- [ ] Real time clock read
-- [ ] Real time clock write
+Here are a few things that are possible
+
+- [ ] A better system shell
+  - [ ] A functioning cursor (left & right arrow key support)
+  - [ ] Command history
+- [ ] Real time clock support
+- [ ] Functioning memory allocation
+- [ ] UEFI bootloader
+- [ ] USB Host Controller drivers
+  - [ ] XHCI (USB 3.0/2.0/1.0 Host Controller)
+  - [ ] EHCI (USB 2.0 Host Controller)
+  - [ ] UHCI/OHCI (USB 1.0 Host Controllers)

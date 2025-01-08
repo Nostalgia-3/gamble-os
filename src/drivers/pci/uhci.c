@@ -40,6 +40,7 @@ PCIDriver get_uhci_driver() {
     return (PCIDriver) {
         .class = 0x0C,
         .subclass = 0x03,
+        .interface = 0x00,
         .device = 0xFFFF,
         .vendor = 0xFFFF,
         .driver = &driver

@@ -43,6 +43,8 @@ void PCI_DriverEntry(Device *dev) {
                     continue;
                 if(drivers[z]->subclass != 0xFF && drivers[z]->subclass != header.subclass)
                     continue;
+                if(drivers[z]->interface != 0xFF && drivers[z]->interface != header.prog_if)
+                    continue;
 
                 if(drivers[z]->driver != NULL) {
                     drivers[z]->driver->data = (void*)((u32)((u8)x << 8) | ((u8)i));

@@ -100,7 +100,7 @@ void i8042_send_ack(u8 com) {
 
 
 
-unsigned char kbdlower_scan1[128] = {
+unsigned char enlower_scan1[128] = {
     0,   0,   '1', '2',  '3', '4', '5', '6', '7', '8', '9', '0',
     '-', '=', '\b','\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i',
     'o', 'p', '[', ']', '\n', 0,   'a', 's', 'd', 'f', 'g', 'h',
@@ -110,7 +110,7 @@ unsigned char kbdlower_scan1[128] = {
     '+', '1', '2', '3', '0', '.'
 };
 
-unsigned char kbdshift_scan1[128] = {
+unsigned char enshift_scan1[128] = {
     0,   0,   '!', '@',  '#', '$', '%', '^', '&', '*', '(', ')',
     '_', '+', '\b','\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I',
     'O', 'P', '{', '}', '\n', 0,   'A', 'S', 'D', 'F', 'G', 'H',
@@ -119,8 +119,6 @@ unsigned char kbdshift_scan1[128] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, '7', '8', '9', '-', '4', '5', '6',
     '+', '1', '2', '3', '0', '.'
 };
-
-
 
 #define KBD_RELEASING   0b00000001
 #define KBD_IGNORE      0b00000010
@@ -320,10 +318,11 @@ void I8042_DriverInt(Device *dev, u8 int_id) {
         if(x & KBD_IGNORE) {
             if(scan == 0x53) { // Delete key
                 reset_cpu();
-            }
-            if(scan < 0x80) {
-                // kprintf("Extended Key Pressed %X\n",scan);
-                pushc(scan, 1);
+            } else {
+                // There should be some check for a flag in the virtual terminal for
+                // whether it should get extended scancodes or not
+                pushc(0xE0);
+                pushc(scan);
             }
 
             x &= ~(KBD_IGNORE);
@@ -338,9 +337,9 @@ void I8042_DriverInt(Device *dev, u8 int_id) {
                 x |= KBD_SHIFT;
             } else {
                 if(x & KBD_SHIFT)
-                    pushc(kbdshift_scan1[scan], 0);
+                    pushc(enshift_scan1[scan]);
                 else
-                    pushc(kbdlower_scan1[scan], 0);
+                    pushc(enlower_scan1[scan]);
             }
         }
 

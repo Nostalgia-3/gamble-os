@@ -102,6 +102,7 @@ PCIDriver get_ac97_driver() {
         .device = 0xFFFF,
         .class  = 0x04,
         .subclass = 0x01,
+        .interface = 0xFF,
         .driver = &driver
     };
 }

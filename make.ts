@@ -11,12 +11,9 @@ import * as m from './m.ts';
 // The date path
 const date = Date.now();
 
-// const LD = `ld`;
-// const GCC = `gcc`;
-
 const MBR               = 'build/mbr.bin';      // The first 512 bytes of the bootloader
 const SECOND_STAGE      = 'build/second.bin';   // The next 2KiB of the bootloader
-const KERNEL            = 'build/kernel.bin';   // The kernel loaded into the output ISO
+const KERNEL            = 'build/kernel.bin';   // A file that's supposed to be loaded by the bootloader (not yet, though)
 const LINKER_SCRIPT     = 'linker.ld';
 
 const MAX_KERNEL_SIZE   = 1024*512;             // This is accurate enough
@@ -150,6 +147,16 @@ function build(pargs: Record<string, unknown>) {
     
     const outFile   = `${pargs.output ?? 'build/kernel'}${pargs['no-date'] ? '' : `-${date}`}.img`;
     Deno.writeFileSync(outFile, fBOOT);
+
+    // 1.   create an empty disk image file
+    // 2.   use fdisk to partition the table
+    // 2.1.     create an efi partition
+    // 3.   create a filesystem on the partition
+    // 3.1.     create a loopback device
+    // 3.2.     add the efi bootloader and kernel
+    // 4.   dd the bios bootloader to the first 512 bytes
+
+    
 
     emulate(pargs);
 }

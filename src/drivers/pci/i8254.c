@@ -1,3 +1,9 @@
+/*
+
+I8254 - Network Card
+  The I8254 is the network card found in QEMU by default.
+*/
+
 #include <drivers/pci/i8254.h>
 #include <drivers/pci.h>
 #include <gosh.h>
@@ -10,6 +16,7 @@ PCIDriver get_i8254_driver() {
         .device = 0x100E,
         .class  = 0xFF,
         .subclass = 0xFF,
+        .interface = 0xFF,
         .driver = &driver
     };
 }

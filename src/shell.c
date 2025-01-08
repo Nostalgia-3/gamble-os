@@ -43,16 +43,16 @@ const char* class_codes[0x14] = {
 };
 
 const char* DEVTYPE_ST[] = {
-    "Unknown",
-    "Keyboard",
-    "Mouse",
-    "Network",
-    "Speaker",
-    "Microphone",
-    "Drive",
+    "Unknown         ",
+    "Keyboard        ",
+    "Mouse           ",
+    "Network         ",
+    "Speaker         ",
+    "Microphone      ",
+    "Drive           ",
     "Virtual Terminal",
-    "Framebuffer",
-    "Driver"
+    "Framebuffer     ",
+    "Driver          "
 };
 
 static u16 WIDTH = 0;
@@ -93,7 +93,7 @@ void putc(u8 c) {
     }
 }
 
-void puts(u8 *ch) {
+void draws(u8 *ch) {
     for(int i=0;i<strlen(ch);i++) {
         if(in_color) {
             cur_color = ch[i];
@@ -157,7 +157,7 @@ void draw_cursor(u8 set) {
 
 void draw(u8 *text) {
     clear_screen();
-    puts(text);
+    draws(text);
 }
 
 // Called whenever any text is written to the virtual terminal
@@ -166,7 +166,7 @@ void shell_write(Device *vt) {
 
     if(dev->textind > prevind) {
         draw_cursor(FALSE);
-        puts(dev->text+prevind);
+        draws(dev->text+prevind);
     } else if(dev->textind < prevind) {
         for(int i=0;i<prevind-dev->textind;i++) {
             draw_cursor(FALSE);
@@ -195,6 +195,7 @@ void run_command(u32 mem) {
 
     if(strcmp("", comm) == 0) {
     } else if(strcmp("help", comm) == 0) {
+        kprintfnoup("\x1b\x0F");
         kprintfnoup("Commands:\n");
         kprintfnoup("  list    <pci | mem | stats>  list tables of data\n");
         kprintfnoup("  cls                          clears the terminal\n");
@@ -205,11 +206,12 @@ void run_command(u32 mem) {
         kprintfnoup("  mount   <drive> <st:path>    Mount a drive\n");
         kprintfnoup("  malloc  <size>               Allocate memory and output the address\n");
         kprintfnoup("  hreset                       Hard restart\n");
+        kprintfnoup("\x1b%c", cur_color);
         update(stdvt());
     } else if(strcmp("list", comm) == 0) {
         comm = strtok(NULL, ' ');
         if(strcmp("pci", comm) == 0) {
-            puts("PCI Devices:\n");
+            draws("PCI Devices:\n");
             PCIHeader header;
             for(int x=0;x<256;x++) {
                 for(int i=0;i<32;i++) {
@@ -269,7 +271,7 @@ void run_command(u32 mem) {
         u32 devsize     = get_gdevt_len();
         for(int i=0;i<devsize;i++) {
             if(!devs[i].is_active) continue;
-            kprintf("Device(%d) = %s\n", i, DEVTYPE_ST[devs[i].type]);
+            kprintf("%03u: %s (id=%03u, owner = %X)\n", i, DEVTYPE_ST[devs[i].type], devs[i].id, devs[i].owner);
         }
     } else if(strcmp("read", comm) == 0) {
         comm = strtok(NULL, ' ');
@@ -361,51 +363,49 @@ int shell_main(u32 mem) {
     kprintf("-= \x1b\x03GaOs \x1b\x0EShell\x1b\x0F v1.0 =-\n");
     kprintf("%s\x1b%c ", prompt, cur_color);
 
+    bool extra = FALSE;
+
     while(running) {
-        struct GlobalSC sc = scanc();
+        u8 sc = scanc();
 
-        // u8 sc = scanc();
-        if (sc.extended){
-            char str[10];
-            // kprintf("--Extended Key Detected--\n");
-            // kprintf("key: %X\n",sc.sc);
-
-            if (sc.sc == 0x4B){
-                curx--;
-                draw_cursor(TRUE);
+        if(extra) {
+            if (sc == 0x4B) {
                 // Left Arrow
-            } else if (sc.sc == 0x4D) {
-                curx++;
-                draw_cursor(TRUE);
+                // draw_cursor(FALSE);
+                // curx--;
+                // draw_cursor(TRUE);
+            } else if (sc == 0x4D) {
                 // Right Arrow
-            } else if (sc.sc == 0x48) {
+                // draw_cursor(FALSE);
+                // curx++;
+                // draw_cursor(TRUE);
+            } else if (sc == 0x48) {
                 // Up Arrow
-
-            } else if (sc.sc == 0x5C) {
+            } else if (sc == 0x5C) {
                 // Down Arrow
             }
-        
+
+            extra = FALSE;
+        } else if(sc == 0xE0) {
+            extra = TRUE;
         } else {
-            if(sc.sc == '\b') {
+            if(sc == '\b') {
                 if(ind != 0) {
                     ind--;
-                    putc_vt(vt, sc.sc);
+                    putc_vt(vt, sc);
                     cmdbfr[ind] = '\0';
                 }
-            } else if(sc.sc == '\n') {
-                putc_vt(vt, sc.sc);
+            } else if(sc == '\n') {
+                putc_vt(vt, sc);
                 run_command(mem);
                 for(int x=0;x<ind;x++) cmdbfr[x] = 0;
                 ind = 0;
 
-                
-
                 if(running) kprintf("%s\x1b%c ", prompt, cur_color);
             } else {
-                // kprintf("Key Pressed %X\n",sc);
                 if(ind > sizeof(cmdbfr)) continue;
-                putc_vt(vt, sc.sc);
-                cmdbfr[ind++] = sc.sc;
+                putc_vt(vt, sc);
+                cmdbfr[ind++] = sc;
             }
         }
 
