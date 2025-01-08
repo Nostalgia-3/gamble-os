@@ -205,13 +205,14 @@ Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code) {
             memset(gdevt[ind].data, 0, sizeof(VTDeviceData));
         break;
 
-        // case DEV_MOUSE:
-        // break;
+        case DEV_MOUSE:
+            gdevt[ind].data = k_malloc(sizeof(MouseDeviceData));
+            if(gdevt[ind].data == NULL) return NULL;
+            memset(gdevt[ind].data, 0, sizeof(MouseDeviceData));
+        break;
 
         default:
-            // puts("Device #");
-            // puts(itoa(dev, 10));
-            // puts(" not handled yet\n");
+            kprintf("Device type #%u not handled yet\n", dev);
             return NULL;
         break;
     }

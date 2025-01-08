@@ -106,8 +106,13 @@ if(Deno.args[0] == 'listen') {
         // PC Speaker
         `-machine pcspk-audiodev=speaker`,
         // RAM
-        `-m 1G`
+        `-m 512M`
     ];
 
-    m.exCall(`qemu-system-i386 ${qemu.join(' ')} -monitor stdio`, Deno.args[0]);
+    if(Deno.args[0]) {
+        m.exCall(`qemu-system-i386 ${qemu.join(' ')} -monitor stdio`, Deno.args[0]);
+    } else {
+        m.call(`qemu-system-i386 ${qemu.join(' ')} -monitor stdio`);
+    }
+
 }
