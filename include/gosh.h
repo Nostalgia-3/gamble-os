@@ -84,14 +84,20 @@ void kpanic();
 
 /********************************** KEYBOARD **********************************/
 
+struct GlobalSC {
+    unsigned char sc;
+    int extended;
+};
+
 // Push a key to the global FIFO
-void pushc(u8 c);
+void pushc(u8 c, int extended);
 
 // Halt the process until a character from the keyboard is detected
-u8  scanc();
+struct GlobalSC scanc();
 
 // Get the latest ascii key pressed, or 0 if there was no key
-u8  getc();
+struct GlobalSC getc();
+
 
 /*********************************** DEVICE ***********************************/
 
@@ -111,10 +117,12 @@ typedef struct _Device {
     void* data;
 } Device;
 
+
 typedef struct _KeyboardDeviceData {
     u8 key_statuses[KeyLen/8];
     u8 fifo[32];
     u8 fifo_ind;
+    int extended
 } KeyboardDeviceData;
 
 typedef struct _MouseDeviceData {

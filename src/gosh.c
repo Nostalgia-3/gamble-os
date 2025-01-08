@@ -3,6 +3,7 @@
 #include <str.h>
 #include <math.h>
 #include <port.h>
+#include <types.h>
 
 Device* gdevt;
 u32 gdevt_len = 0;
@@ -71,7 +72,7 @@ __attribute__((noreturn)) void kpanic() {
 
 /********************************** KEYBOARD **********************************/
 
-void pushc(u8 c) {
+void pushc(u8 c,int extended) {
     if(c == 0) return;
     Device* dev = k_get_device_by_owner(KERNEL_ID, DEV_KEYBOARD);
     if(dev == NULL) return;
@@ -80,30 +81,61 @@ void pushc(u8 c) {
     if(data == NULL) return;
 
     if(data->fifo_ind > sizeof(data->fifo)) return;
+    data->extended = extended;
     data->fifo[data->fifo_ind++] = c;
+    
+    // if(extended == 0) {
+    //     data->fifo[data->fifo_ind++] = c;
+    // } else {
+
+    //     data->fifo[data->fifo_ind++] = c;
+    // }
+    
 }
 
 // Halt the process until a character from the keyboard is detected
-u8 scanc() {
-    u8 d;
-    
-    do { d = getc(); } while(d == 0);
-    return d;
+struct GlobalSC scanc() {
+    struct GlobalSC rValue;
+    do { rValue = getc(); } while(rValue.sc == 0);
+    // do { d = getc().sc; } while(d == 0);
+    return rValue;
+    // return 0;
 }
 
 // Get the latest ascii key pressed, or 0 if there was no key
-u8 getc() {
+// u8 getc() {
+//     Device* dev = k_get_device_by_owner(KERNEL_ID, DEV_KEYBOARD);
+//     if(dev == NULL) return 0;
+
+//     KeyboardDeviceData* data = (KeyboardDeviceData*) dev->data;
+//     u8 k = data->fifo[0];
+//     if(k == 0) return 0;
+
+//     memcpy(data->fifo, data->fifo+1, sizeof(data->fifo)-1);
+//     if(data->fifo_ind != 0) data->fifo_ind--;
+//     kprintf("extended key: %X",data->extended);
+//     return k;
+// }
+
+
+
+struct GlobalSC getc() {
+    struct GlobalSC rValue;
+    rValue.sc = 0;
+    rValue.extended = 0;
     Device* dev = k_get_device_by_owner(KERNEL_ID, DEV_KEYBOARD);
-    if(dev == NULL) return 0;
+    if(dev == NULL) return rValue;
 
     KeyboardDeviceData* data = (KeyboardDeviceData*) dev->data;
-    u8 k = data->fifo[0];
-    if(k == 0) return 0;
+    rValue.sc = data->fifo[0];
+    if(rValue.sc == 0) return rValue;
 
     memcpy(data->fifo, data->fifo+1, sizeof(data->fifo)-1);
     if(data->fifo_ind != 0) data->fifo_ind--;
-
-    return k;
+    rValue.extended = data->extended;
+    
+    // return k;
+    return rValue;
 }
 
 /*********************************** DEVICE ***********************************/

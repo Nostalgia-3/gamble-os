@@ -98,6 +98,8 @@ void i8042_send_ack(u8 com) {
     } while(resp != 0xFA);
 }
 
+
+
 unsigned char kbdlower_scan1[128] = {
     0,   0,   '1', '2',  '3', '4', '5', '6', '7', '8', '9', '0',
     '-', '=', '\b','\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i',
@@ -117,6 +119,8 @@ unsigned char kbdshift_scan1[128] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, '7', '8', '9', '-', '4', '5', '6',
     '+', '1', '2', '3', '0', '.'
 };
+
+
 
 #define KBD_RELEASING   0b00000001
 #define KBD_IGNORE      0b00000010
@@ -312,10 +316,16 @@ void I8042_DriverInt(Device *dev, u8 int_id) {
 
     if(int_id == 0x21) { // KBD
         u8 scan = inb(0x60);
+        // kprintf("Key Pressed %X\n",scan);
         if(x & KBD_IGNORE) {
-            if(0x53) { // Delete key
+            if(scan == 0x53) { // Delete key
                 reset_cpu();
             }
+            if(scan < 0x80) {
+                // kprintf("Extended Key Pressed %X\n",scan);
+                pushc(scan, 1);
+            }
+
             x &= ~(KBD_IGNORE);
         } else if(scan == 0xE0) {
             x |= KBD_IGNORE;
@@ -328,9 +338,9 @@ void I8042_DriverInt(Device *dev, u8 int_id) {
                 x |= KBD_SHIFT;
             } else {
                 if(x & KBD_SHIFT)
-                    pushc(kbdshift_scan1[scan]);
+                    pushc(kbdshift_scan1[scan], 0);
                 else
-                    pushc(kbdlower_scan1[scan]);
+                    pushc(kbdlower_scan1[scan], 0);
             }
         }
 
