@@ -1,5 +1,5 @@
 #include <drivers/pci.h>
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include <memory.h>
 #include <str.h>
 

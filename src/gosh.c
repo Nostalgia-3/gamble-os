@@ -1,4 +1,5 @@
-#include "gosh.h"
+#include <gosh/gosh.h>
+#include <stdarg.h>
 #include <memory.h>
 #include <str.h>
 #include <math.h>
@@ -125,10 +126,10 @@ void _init_gdevt() {
     if(stdvt != NULL) {
         VTDeviceData* vtdata = stdvt->data;
         if(vtdata != NULL) {
-            vtdata->text = k_malloc(3000);
+            vtdata->text = k_malloc(6000);
             if(vtdata->text != NULL) {
-                memset(vtdata->text, 0, 3000);
-                vtdata->textlen = 3000;
+                memset(vtdata->text, 0, 6000);
+                vtdata->textlen = 6000;
             }
         } else {
             putc_dbg('%');
@@ -368,17 +369,17 @@ GenPCIHeader pci_get_gen_header(u8 bus, u8 slot) {
 
     if(pci_read_config(bus, slot, 0, 0) == 0xFFFF) return header;
 
-    header.bar0 = pci_read_config(bus, slot, 0, 0x10)
+    header.bar[0] = pci_read_config(bus, slot, 0, 0x10)
                 | (pci_read_config(bus, slot, 0, 0x12) << 16);
-    header.bar1 = pci_read_config(bus, slot, 0, 0x14)
+    header.bar[1] = pci_read_config(bus, slot, 0, 0x14)
                 | (pci_read_config(bus, slot, 0, 0x16) << 16);
-    header.bar2 = pci_read_config(bus, slot, 0, 0x18)
+    header.bar[2] = pci_read_config(bus, slot, 0, 0x18)
                 | (pci_read_config(bus, slot, 0, 0x1A) << 16);
-    header.bar3 = pci_read_config(bus, slot, 0, 0x1C)
+    header.bar[3] = pci_read_config(bus, slot, 0, 0x1C)
                 | (pci_read_config(bus, slot, 0, 0x1E) << 16);
-    header.bar4 = pci_read_config(bus, slot, 0, 0x20)
+    header.bar[4] = pci_read_config(bus, slot, 0, 0x20)
                 | (pci_read_config(bus, slot, 0, 0x22) << 16);
-    header.bar5 = pci_read_config(bus, slot, 0, 0x24)
+    header.bar[5] = pci_read_config(bus, slot, 0, 0x24)
                 | (pci_read_config(bus, slot, 0, 0x26) << 16);
     
     header.cis_pointer          = pci_read_config(bus, slot, 0, 0x28) | (pci_read_config(bus, slot, 0, 0x2A) << 16);
@@ -660,11 +661,26 @@ void fb_draw_char(Device *fb, u16 x, u16 y, u8 c, u32 color) {
             *(u8*)(info->buffer+((x+y*info->w)/8)*2) = c;
             *(u8*)(info->buffer+((x+y*info->w)/8)*2+1) = (u8)color;
         }
-    } else {
-        for(u8 ix=0;ix<8;ix++) {
-            for(u8 iy=0;iy<8;iy++) {
+    } else if(info->format == PixelFormat_LINEAR_I8) {
+        for(u16 iy=0;iy<8;iy++) {
+            for(u16 ix=0;ix<8;ix++) {
                 if(font8x8_basic[c][iy] & (1 << ix))
-                    fb_draw_pixel(fb, x+ix, y+iy, color);
+                    *(u8*)((info->buffer)+(ix+x)+((iy+y)*info->w)) = (color);
+            }
+        }
+    } else if(info->format == PixelFormat_PLANAR_I4) {
+        outb(0x3C4, 2); // mask register
+        if(color == 0)
+            outb(0x3C5, 0b1111);
+        else
+            outb(0x3C5, color | 1);
+
+        for(u16 iy=0;iy<8;iy++) {
+            for(u16 ix=0;ix<8;ix++) {
+                if(font8x8_basic[c][iy] & (1 << ix))
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8) |= (1) << (8-((x+ix)%8+1));
+                else
+                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8) &= ~(1 << (8-((x+ix)%8+1)));
             }
         }
     }
@@ -689,13 +705,10 @@ void fb_clear(Device *fb, u32 color) {
 
         for(u16 iy=0;iy<info->h;iy++) {
             for(u16 ix=0;ix<info->w;ix++) {
-                u8 bit = (1) << (8-((ix)%8+1));
-                u32 byte = ((ix)+(iy)*info->w)/8;
-
                 if(color)
-                    *(u8*)(info->buffer + (byte) + 0x00000) |= bit;
+                    *(u8*)(info->buffer + (((ix)+(iy)*info->w)/8) + 0x00000) = 0xFF;
                 else
-                    *(u8*)(info->buffer + (byte) + 0x00000) &= ~bit;
+                    *(u8*)(info->buffer + (((ix)+(iy)*info->w)/8) + 0x00000) = 0x00;
             }
         }
     } else if(info->format == PixelFormat_TEXT_640x480) {
@@ -1253,6 +1266,18 @@ void flush_vt(Device *vt) {
     VTDeviceData* data = (VTDeviceData*) vt->data;
     memset(data->text, 0, data->textlen);
     data->textind = 0;
+}
+
+void vt_shift(Device *vt, u32 count) {
+    if(vt == NULL || vt->type != DEV_VIRT_TERM) {
+        return;
+    }
+
+    VTDeviceData* data = (VTDeviceData*) vt->data;
+    memcpy(data->text, data->text+count, data->textlen - count);
+    // Make sure the count bytes at the end are zero
+    memset(data->text+data->textind, 0, count);
+    data->textind-=count;
 }
 
 /*********************************** DRIVES ***********************************/

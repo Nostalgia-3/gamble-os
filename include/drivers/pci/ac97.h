@@ -2,7 +2,7 @@
 #define AC97_H
 
 #include <drivers/pci.h>
-#include <gosh.h>
+#include <gosh/gosh.h>
 
 PCIDriver get_ac97_driver();
 void AC97_DriverEntry(Device *dev);

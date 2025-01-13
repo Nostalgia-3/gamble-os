@@ -10,7 +10,7 @@
 #ifndef PCI_H
 #define PCI_H
 
-#include <gosh.h>
+#include <gosh/gosh.h>
 
 // When set to 0xFF/0xFFFF, values are ignored
 typedef struct _PCIDriver {

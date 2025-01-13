@@ -1,4 +1,4 @@
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include <drivers/x86/i8042.h>
 #include <memory.h>
 #include <port.h>
@@ -51,15 +51,18 @@ void i8042_set_config(I8042_Config config) {
         I8042_Config conf;
     } conf = { .conf = config };
 
-    while(i8042_get_status().input_buff_state == 1) continue;
+    u16 timeout = 800;
+    while(timeout > 0 && i8042_get_status().input_buff_state == 1) timeout--;
     outb(0x64, COM_WRITE_CONFIG);
     i8042_send_byte(conf.b);
 }
 
 I8042_Config i8042_get_config() {
-    while(i8042_get_status().input_buff_state == 1) continue;
+    u16 timeout = 800;
+    while(timeout > 0 &&i8042_get_status().input_buff_state == 1) timeout--;
     outb(0x64, COM_READ_B0);
-    while(i8042_get_status().output_buff_state == 0) continue;
+    timeout = 800;
+    while(timeout > 0 && i8042_get_status().output_buff_state == 0) timeout--;
     u8 config = inb(0x60);
 
     union
@@ -72,17 +75,20 @@ I8042_Config i8042_get_config() {
 }
 
 void i8042_send_cont_comm(u8 byte) {
-    while(i8042_get_status().input_buff_state == 1) continue;
+    u16 timeout = 800;
+    while(timeout > 0 && i8042_get_status().input_buff_state == 1) continue;
     outb(0x64, byte);
 }
 
 void i8042_send_byte(u8 byte) {
-    while(i8042_get_status().input_buff_state == 1) continue;
+    u16 timeout = 800;
+    while(timeout > 0 && i8042_get_status().input_buff_state == 1) continue;
     outb(0x60, byte);
 }
 
 u8 i8042_get_byte() {
-    while(i8042_get_status().output_buff_state != 1) continue;
+    u16 timeout = 800;
+    while(timeout > 0 && i8042_get_status().output_buff_state != 1) continue;
     io_wait();
     return inb(0x60);
 }
@@ -90,12 +96,13 @@ u8 i8042_get_byte() {
 void i8042_send_ack(u8 com) {
     u8 resp;
     i8042_send_byte(com);
+    u16 timeout = 800;
     do {
         resp = inb(0x60);
         if(resp == 0xFE) {
             i8042_send_byte(com);
         }
-    } while(resp != 0xFA);
+    } while(timeout > 0 && resp != 0xFA);
 }
 
 
@@ -304,7 +311,8 @@ dev2_start:
 }
 
 void reset_cpu() {
-    while(i8042_get_status().input_buff_state == 1) continue;
+    u16 timeout = 800;
+    while(timeout > 0 && i8042_get_status().input_buff_state == 1) timeout--;
     outb(0x64, COM_RESET_CPU); // reset the cpu
 }
 

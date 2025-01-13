@@ -1,4 +1,4 @@
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include <memory.h>
 #include <port.h>
 #include "drivers/x86/vga.h"

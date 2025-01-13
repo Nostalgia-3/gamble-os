@@ -3,7 +3,7 @@
 #include "int.h"
 #include "types.h"
 
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include <port.h>
 
 #define PIC1            0x20        /* IO base address for master PIC */
@@ -25,17 +25,25 @@
 #define ICW4_BUF_MASTER 0x0C        /* Buffered mode/master */
 #define ICW4_SFNM       0x10        /* Special fully nested (not) */
 
-__attribute__((aligned(0x10))) static idt_entry_t idt[IDT_MAX_DESCRIPTORS];
+__attribute__((aligned(16))) static idt_entry_t idt[IDT_MAX_DESCRIPTORS];
 static idtr_t idtr;
 static bool vectors[IDT_MAX_DESCRIPTORS];
 
+#include <str.h>
 void exception_handler(u8 d) {
     putc_dbg('E');
+    putc_dbg('(');
+    u8* st = itoa(d, 10);
+    for(int i=0;i<strlen(st);i++) {
+        putc_dbg(st[i]);
+    }
+    putc_dbg(')');
+
     
     __asm__ volatile (
         "cli\n hlt":
     ); // Completely hangs the computer
-    while(1); // <-- this is to make the compiler shut up
+    while(1) __asm__ volatile("hlt"); // <-- this is to make the compiler shut up
 }
 
 static bool vectors[IDT_MAX_DESCRIPTORS];
@@ -125,7 +133,7 @@ void idt_set_descriptor(u8 vector, void* isr, u8 flags) {
     idt_entry_t* descriptor = &idt[vector];
 
     descriptor->isr_low        = (u32)isr & 0xFFFF;
-    descriptor->kernel_cs      = 0x08; // this value can be whatever offset your kernel code selector is in your GDT
+    descriptor->kernel_cs      = 0x08; // bytes into the GDT (this is the code)
     descriptor->attributes     = flags;
     descriptor->isr_high       = (u32)isr >> 16;
     descriptor->reserved       = 0;

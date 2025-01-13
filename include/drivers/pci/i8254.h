@@ -1,7 +1,7 @@
 #ifndef I8254_H
 #define I8254_H
 
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include <drivers/pci.h>
 
 PCIDriver get_i8254_driver();

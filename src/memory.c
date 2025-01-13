@@ -1,4 +1,4 @@
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include "types.h"
 #include "memory.h"
 #include "math.h"

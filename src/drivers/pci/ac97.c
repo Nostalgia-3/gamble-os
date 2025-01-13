@@ -1,5 +1,5 @@
 #include <drivers/pci/ac97.h>
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include <memory.h>
 #include <types.h>
 #include <port.h>
@@ -116,8 +116,8 @@ void AC97_DriverEntry(Device *dev) {
     GenPCIHeader header = pci_get_gen_header(bus, slot);
     pci_set_comm(PCI_IO_SPACE | PCI_BUS_MASTER, bus, slot);
 
-    u16 nam     = (u16) (header.bar0 & 0xFFFFFFFC);
-    u16 nabm    = (u16) (header.bar1 & 0xFFFFFFFC);
+    u16 nam     = (u16) (header.bar[0] & 0xFFFFFFFC);
+    u16 nabm    = (u16) (header.bar[1] & 0xFFFFFFFC);
 
     // 16-bit audio, no interrupt, 2 channels
     outw(nabm + GLOB_CNT, (0b00 << 22) | (0b00 << 20) | (0<<2) | (1<<1));

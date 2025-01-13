@@ -1,6 +1,6 @@
 // Generic shell program for testing
 #include <shell.h>
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include <types.h>
 #include <str.h>
 #include <memory.h>
@@ -55,11 +55,11 @@ const char* DEVTYPE_ST[] = {
     "Driver          "
 };
 
-static u16 WIDTH = 0;
+static u16 WIDTH    = 0;
+static u16 HEIGHT   = 0;
 
-static u16 curx = 0;
-static u16 cury = 0;
-static u16 curz = 0;
+static u16 curx     = 0;
+static u16 cury     = 0;
 
 static u8 cur_color = 15;
 
@@ -68,6 +68,7 @@ static u8 ind = 0;
 
 static Device *fb;
 static Device *vt;
+static FBInfo info;
 
 static u8 running = TRUE;
 
@@ -79,7 +80,6 @@ void clear_screen() {
     fb_clear(fb, 0);
     curx = 0;
     cury = 0;
-    curz = 0;
 }
 
 void putc(u8 c) {
@@ -90,6 +90,16 @@ void putc(u8 c) {
         in_color = TRUE;
     } else {
         kprintfnoup("%c", c);
+    }
+}
+
+void scroll_down() {
+    if(((FBInfo*)fb->data)->format == PixelFormat_TEXT_640x480) {
+        u32 line_width = (WIDTH*2);
+        for(u32 i=1;i<25;i++) {
+            memcpy((u8*)0xB8000+line_width*(i-1), (u8*)0xB8000+line_width*i, line_width);
+        }
+        memset((u8*)0xB8000+line_width*(HEIGHT-1), 0, line_width);
     }
 }
 
@@ -104,8 +114,13 @@ void draws(u8 *ch) {
             fb_draw_char(fb, curx*8, cury*8, ch[i], (u32)cur_color);
             if(is_printable(ch[i])) curx++;
             if(curx >= WIDTH || ch[i] == '\n') {
-                curx = 0;
-                cury++;
+                if((cury+1) >= HEIGHT) {
+                    scroll_down();
+                    curx = 0;
+                } else {
+                    curx = 0;
+                    cury++;
+                }
             }
         }
     }
@@ -149,9 +164,9 @@ void hexdump(u8* addr, u32 size) {
 }
 
 void draw_cursor(u8 set) {
-    if(((FBInfo*)fb->data)->format == PixelFormat_TEXT_640x480)
+    if(((FBInfo*)fb->data)->format == PixelFormat_TEXT_640x480) {
         vga_set_cursor(curx, cury);
-    else
+    } else
         fb_draw_rect(fb, curx*8, cury*8+6, 8, 2, set ? cur_color : 0);
 }
 
@@ -197,15 +212,16 @@ void run_command(u32 mem) {
     } else if(strcmp("help", comm) == 0) {
         kprintfnoup("\x1b\x0F");
         kprintfnoup("Commands:\n");
-        kprintfnoup("  list    <pci | mem | stats>  list tables of data\n");
+        kprintfnoup("  list     <subcommand>        list system data\n");
         kprintfnoup("  cls                          clears the terminal\n");
-        kprintfnoup("  color   <color>              set the foreground text color\n");
-        kprintfnoup("  hexdump <addr> <count>       hexdump count bytes at addr\n");
-        kprintfnoup("  lsdevs                       list all registered devices\n");
-        kprintfnoup("  read    <did> <sec> <addr>   Read a sector from a drive\n");
-        kprintfnoup("  mount   <drive> <st:path>    Mount a drive\n");
-        kprintfnoup("  malloc  <size>               Allocate memory and output the address\n");
+        kprintfnoup("  color    <color>             set the foreground text color\n");
+        kprintfnoup("  hexdump  <addr> <count>      hexdump count bytes at addr\n");
+        kprintfnoup("  read     <did> <sec> <addr>  Read a sector from a drive\n");
+        kprintfnoup("  mount    <drive> <st:path>   Mount a drive\n");
+        kprintfnoup("  malloc   <size>              Allocate memory and output the address\n");
         kprintfnoup("  hreset                       Hard restart\n");
+        kprintfnoup("  in[b/l]  <port>              Read data from a system port\n");
+        kprintfnoup("  out[b/l] <port> <data>       Write data to a system port\n");
         kprintfnoup("\x1b%c", cur_color);
         update(stdvt());
     } else if(strcmp("list", comm) == 0) {
@@ -230,10 +246,18 @@ void run_command(u32 mem) {
                 struct MemoryEntry* e = (struct MemoryEntry*)(0x1000);
                 kprintfnoup("0x%08X%08X | 0x%08X%08X | %u\n", e[i].base2, e[i].base1, e[i].len2, e[i].len1, e[i].type);
             }
+            update(vt);
         } else if(strcmp("stats", comm) == 0) {
-            kprintf("Memory usage: %u/%u\n", k_get_used(), MEM_MAX);
+            kprintf("Memory usage: %uKiB / %uKiB\n", k_get_used()/1024, MEM_MAX/1024);
+        } else if(strcmp("devs", comm) == 0) {
+            Device* devs    = get_gdevt();
+            u32 devsize     = get_gdevt_len();
+            for(int i=0;i<devsize;i++) {
+                if(!devs[i].is_active) continue;
+                kprintf("%03u: %s (id=%03u, owner = 0x%X)\n", i, DEVTYPE_ST[devs[i].type], devs[i].id, devs[i].owner);
+            }
         } else if(strcmp("", comm) == 0) {
-            kprintf("Subcommands:\n  pci - list all connected pci devices\n  mem - list all memory segments\n  stats - list OS stats\n");
+            kprintf("Subcommands:\n  pci - list all connected pci devices\n  mem - list all memory segments\n  stats - list OS stats\n  devs - list OS devices\n");
         } else {
             kprintf("Unkown list subcommand: \"");
             kprintf(comm);
@@ -265,13 +289,6 @@ void run_command(u32 mem) {
             if(size) putc('\n');
         } else {
             kprintf("Format: hexdump <addr> <size>\n");
-        }
-    } else if(strcmp("lsdevs", comm) == 0) {
-        Device* devs    = get_gdevt();
-        u32 devsize     = get_gdevt_len();
-        for(int i=0;i<devsize;i++) {
-            if(!devs[i].is_active) continue;
-            kprintf("%03u: %s (id=%03u, owner = %X)\n", i, DEVTYPE_ST[devs[i].type], devs[i].id, devs[i].owner);
         }
     } else if(strcmp("read", comm) == 0) {
         comm = strtok(NULL, ' ');
@@ -319,35 +336,77 @@ void run_command(u32 mem) {
         }
     } else if(strcmp("hreset", comm) == 0) {
         reset_cpu();
-    } else if(strcmp("sb16detect", comm) == 0) {
-        // reset DSP
-        outb(0x226, 1);
-        io_wait();
-        outb(0x226, 0);
-        u16 l = 0xFFFF; // this is for slow SBs
-        while(l != 0) {
-            if(inb(0x22E) >> 7) {
-                kprintf("output = 0x%X (expected 0xAA)\n", inb(0x22A));
-                break;
-            }
-            l--;
+    } else if(strcmp("inb", comm) == 0) {
+        comm = strtok(NULL, ' ');
+        u32 port = hatoi(comm);
+        if(strcmp(comm, "") == 0) {
+            kprintf("Format: inb <port: hex>\n");
+            return;
         }
+
+        kprintf("0x%02X (port = 0x%04X)\n", inb(port & 0xFFFF), port & 0xFFFF);
+    } else if(strcmp("outb", comm) == 0) {
+        comm = strtok(NULL, ' ');
+        u32 port = hatoi(comm);
+        if(strcmp(comm, "") == 0) {
+            kprintf("Format: outb <port: hex> <val: hex>\n");
+            return;
+        }
+
+        comm = strtok(NULL, ' ');
+        u32 val = hatoi(comm);
+        if(strcmp(comm, "") == 0) {
+            kprintf("Format: outb <port: hex> <val: hex>\n");
+            return;
+        }
+
+        outb(port & 0xFFFF, val & 0xFF);
+    } else if(strcmp("inl", comm) == 0) {
+        comm = strtok(NULL, ' ');
+        u32 port = hatoi(comm);
+        if(strcmp(comm, "") == 0) {
+            kprintf("Format: inl <port: hex>\n");
+            return;
+        }
+
+        kprintf("0x%08X (port = 0x%04X)\n", inl(port & 0xFFFF), port & 0xFFFF);
+    } else if(strcmp("outl", comm) == 0) {
+        comm = strtok(NULL, ' ');
+        u32 port = hatoi(comm);
+        if(strcmp(comm, "") == 0) {
+            kprintf("Format: outl <port: hex> <val: hex>\n");
+            return;
+        }
+
+        comm = strtok(NULL, ' ');
+        u32 val = hatoi(comm);
+        if(strcmp(comm, "") == 0) {
+            kprintf("Format: outl <port: hex> <val: hex>\n");
+            return;
+        }
+
+        outl(port & 0xFFFF, val);
+    } else if(strcmp("curat", comm) == 0) {
+        kprintf("%u, %u\n", curx, cury);
     } else {
         kprintf("Unknown command \"%s\"\n", comm);
     }
 }
 
-char commandHistory[25][80];
-int commandHistoryLoc = 0;
+// char commandHistory[25][80];
+// int commandHistoryLoc = 0;
 
 int shell_main(u32 mem) {
     fb = fb_get(RESOLUTION);
     if(fb == NULL) return 1;
+    info = fb_get_info(fb);
 
     if(((FBInfo*)fb->data)->format == PixelFormat_TEXT_640x480) {
-        WIDTH = ((FBDeviceData*)fb->data)->w;
+        WIDTH   = ((FBDeviceData*)fb->data)->w;
+        HEIGHT  = ((FBDeviceData*)fb->data)->h;
     } else {
-        WIDTH = ((FBDeviceData*)fb->data)->w/8;
+        WIDTH   = ((FBDeviceData*)fb->data)->w/8;
+        HEIGHT  = ((FBDeviceData*)fb->data)->h/8;
     }
 
     vt = stdvt();

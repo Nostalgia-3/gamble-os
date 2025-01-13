@@ -16,10 +16,10 @@
 
 // This is REALLY bad, and I really should implement proper memory detection,
 // but I just want to make a functional shell
-#define MEM_BASE    0x60000 // 0x00100000
-#define MEM_END     0x7FFFF // 0x00EFFFFF
+#define MEM_BASE    0x00100000 // 0x60000
+#define MEM_END     0x00200000 // 0x7FFFF
 #define MEM_MAX     (MEM_END-MEM_BASE)
-#define BLOCK_SIZE  16      // 256
+#define BLOCK_SIZE  256      // 256
 #define MAX_BLOCKS  (u32)((MEM_MAX)/BLOCK_SIZE)
 
 #define MAX_ALLOCS  1234          // The max number of specific allocations

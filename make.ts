@@ -9,7 +9,7 @@ import path from 'node:path';
 import * as m from './m.ts';
 
 // The date path
-const date = Date.now();
+const date = Date.now().toString();
 
 const MBR               = 'build/mbr.bin';      // The first 512 bytes of the bootloader
 const SECOND_STAGE      = 'build/second.bin';   // The next 2KiB of the bootloader
@@ -69,7 +69,7 @@ yargs(Deno.args)
 .parseSync();
 
 function emulate(pargs: Record<string, unknown>) {
-    const output = m.scanDir('build', /.*\.img/);
+    const output = m.scanDir('build', /.*\.iso/);
 
     if(!output[0]) {
         console.error(`\x1b[31m/!\\\x1b[0m Couldn't find an image file`);
@@ -89,10 +89,15 @@ function emulate(pargs: Record<string, unknown>) {
         `-audio driver=sdl,model=ac97,id=speaker`,
         // PC Speaker
         `-machine pcspk-audiodev=speaker`,
+        // E1000 network card
+        `-net nic,model=e1000`, // macaddr=00:11:22:33:44:55
+        `-net user`,
+        // Add a generic usb device
+        '-device qemu-xhci',
         // RAM
         `-m 512M`,
-        // Add a generic usb device
-        '-device qemu-xhci'
+        // Give information about interrupts
+        // `-d int`
     ];
 
     if(pargs.exip == undefined) {
@@ -108,15 +113,16 @@ function build(pargs: Record<string, unknown>) {
     }
 
     Deno.mkdirSync('build');
+    Deno.mkdirSync('build/iso');
 
     const assemblyFiles: string[] = m.scanDir('src/', /\.asm$/, /^s\_/).sort((a,b)=>a.charCodeAt(0)-b.charCodeAt(0));
     const cFiles: string[] = m.scanDir('src/', /\.c$/);
     
-    m.call(`nasm src/boot/s_main.asm -fbin -o ${MBR}`);
-    m.call(`nasm src/boot/s_second.asm -fbin -o ${SECOND_STAGE}`);
+    m.call(`${pargs.nasm} src/boot/s_main.asm -fbin -o ${MBR}`);
+    m.call(`${pargs.nasm} src/boot/s_second.asm -fbin -o ${SECOND_STAGE}`);
     
     for(const asm of assemblyFiles)
-        m.call(`nasm ${asm} -felf -o build/${m.ext(m.base(asm), '.asm.o')}`);
+        m.call(`${pargs.nasm} ${asm} -felf32 -o build/${m.ext(m.base(asm), '.asm.o')}`);
     
     for(const c of cFiles) {
         m.call(`${pargs.gcc} -I ${INCLUDE} -O1 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
@@ -132,7 +138,7 @@ function build(pargs: Record<string, unknown>) {
         objs.push(file);
     }
 
-    m.call(`${pargs.ld} -m elf_i386 -T ${LINKER_SCRIPT} -o ${KERNEL} --oformat binary ${objs.join(' ')}`);
+    m.call(`${pargs.gcc} -T ${LINKER_SCRIPT} -o ${KERNEL} -ffreestanding -O2 -nostdlib -m32 ${objs.join(' ')}`);
     
     const fMBR = Deno.readFileSync(MBR);
     const fKERNEL = Deno.readFileSync(KERNEL);
@@ -145,18 +151,15 @@ function build(pargs: Record<string, unknown>) {
     fBOOT.set(fSECOND, fMBR.length);
     fBOOT.set(fKERNEL, fMBR.length+fSECOND.length);
     
-    const outFile   = `${pargs.output ?? 'build/kernel'}${pargs['no-date'] ? '' : `-${date}`}.img`;
-    Deno.writeFileSync(outFile, fBOOT);
+    const outFile   = `${pargs.output ?? 'build/kernel'}${pargs['no-date'] ? '' : `-${date}`}.iso`;
 
-    // 1.   create an empty disk image file
-    // 2.   use fdisk to partition the table
-    // 2.1.     create an efi partition
-    // 3.   create a filesystem on the partition
-    // 3.1.     create a loopback device
-    // 3.2.     add the efi bootloader and kernel
-    // 4.   dd the bios bootloader to the first 512 bytes
+    // Make a GRUB iso
+    Deno.mkdirSync('build/iso/sys');
+    Deno.mkdirSync('build/iso/boot/grub', { recursive: true });
+    Deno.copyFileSync('grub.cfg', 'build/iso/boot/grub/grub.cfg');
+    Deno.copyFileSync(KERNEL, 'build/iso/sys/kernel.bin');
 
-    
+    m.call(`grub-mkrescue -o ${outFile} build/iso`);
 
     emulate(pargs);
 }

@@ -2,7 +2,7 @@
 #define UHCI_H
 
 #include <drivers/pci.h>
-#include <gosh.h>
+#include <gosh/gosh.h>
 
 PCIDriver get_uhci_driver();
 void UCHIDriverEntry(Device *dev);

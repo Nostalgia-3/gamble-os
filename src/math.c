@@ -3,6 +3,10 @@
 
 #define TERMS 10 // I have no idea what this should be
 
+double abs(double x) {
+    return x >= 0 ? x : -x;
+}
+
 f32 ceil(f32 x) {
     i32 i = (i32)x;
     if(x > i)   return (f32) i + 1.0;
@@ -53,6 +57,21 @@ float cosine(int deg) {
         cos += power(-1, i) * power(rad, 2 * i) / fact(2 * i);
     }
     return cos;
+}
+
+float sqrt(float v) {
+    double x = 1.0;
+    int error = 0;
+
+    if(v <= 0) {
+        return 0;
+    }
+
+    while(abs(error = v - x * x) > .0005) {
+        x = x + error/ (2 * x);
+    }
+
+    return x;
 }
 
 static u32 seed = 0xcafebabe; /* anything nonzero will do */

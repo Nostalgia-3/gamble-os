@@ -9,7 +9,7 @@
 #ifndef I8042_H
 #define I8042_H
 
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include "types.h"
 
 typedef struct _I8042_Status {

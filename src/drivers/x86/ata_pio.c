@@ -1,4 +1,4 @@
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include <port.h>
 #include "drivers/x86/ata_pio.h"
 

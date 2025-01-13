@@ -1,7 +1,7 @@
 #ifndef SHELL_H
 #define SHELL_H
 
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include <types.h>
 
 void shell_write(Device *vt);

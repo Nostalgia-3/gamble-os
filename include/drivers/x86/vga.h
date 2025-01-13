@@ -1,7 +1,7 @@
 #ifndef VGA_H
 #define VGA_H
 
-#include <gosh.h>
+#include <gosh/gosh.h>
 #include "types.h"
 
 void VGA_DriverEntry(Device *dev);

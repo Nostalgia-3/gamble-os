@@ -1,25 +1,32 @@
-ENTRY(_start)
-OUTPUT_FORMAT(elf32-i386)
-STARTUP(build/a_kernel-entry.asm.o)
+ENTRY(_load)
+OUTPUT_FORMAT(elf32-i386) /* binary */
+/* STARTUP(build/a_kernel-entry.asm.o) */
 
 SECTIONS
 {
-  . = 0x9000;
-  .text : ALIGN(CONSTANT(MAXPAGESIZE)) {
-_TEXT_START_ = .;
-    *(.text)
-_TEXT_END_ = .;
-  }
+  . = 2M;
+  .text BLOCK(4K) : ALIGN(4K)
+	{
+		*(.multiboot)
+		*(.text)
+	}
 
-  .data : ALIGN(CONSTANT(MAXPAGESIZE)) {
-_DATA_START_ = .;
-    *(.data)
-_DATA_END_ = .;
-  }
+	/* Read-only data. */
+	.rodata BLOCK(4K) : ALIGN(4K)
+	{
+		*(.rodata)
+	}
 
-  .bss : ALIGN(CONSTANT(MAXPAGESIZE)) {
-_BSS_START_ = .;
-    *(.bss)
-_BSS_END_ = .;
-  }
+	/* Read-write data (initialized) */
+	.data BLOCK(4K) : ALIGN(4K)
+	{
+		*(.data)
+	}
+
+	/* Read-write data (uninitialized) and stack */
+	.bss BLOCK(4K) : ALIGN(4K)
+	{
+		*(COMMON)
+		*(.bss)
+	}
 }

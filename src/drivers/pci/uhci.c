@@ -1,6 +1,6 @@
 #include <drivers/pci/uhci.h>
 #include <drivers/pci.h>
-#include <gosh.h>
+#include <gosh/gosh.h>
 
 #define CMD_RUN             (1<<0)
 #define CMD_HOST_CON_RESET  (1<<1)
