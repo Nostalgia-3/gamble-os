@@ -133,7 +133,7 @@ void idt_set_descriptor(u8 vector, void* isr, u8 flags) {
     idt_entry_t* descriptor = &idt[vector];
 
     descriptor->isr_low        = (u32)isr & 0xFFFF;
-    descriptor->kernel_cs      = 0x08; // bytes into the GDT (this is the code)
+    descriptor->kernel_cs      = 0x08*2; // bytes into the GDT (this is the code)
     descriptor->attributes     = flags;
     descriptor->isr_high       = (u32)isr >> 16;
     descriptor->reserved       = 0;
