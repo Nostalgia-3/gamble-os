@@ -240,7 +240,7 @@ void rxinit() {
     write_comm(REG_TXDESCLO, 0);
     write_comm(REG_TXDESCHI, (u32)((u32)ptr & 0xFFFFFFFF));
 
-    write_comm(REG_RXDESCLO, ptr);
+    write_comm(REG_RXDESCLO, (u32)ptr);
     write_comm(REG_RXDESCHI, 0);
 
     write_comm(REG_RXDESCLEN, E1000_NUM_RX_DESC * 16);
@@ -249,7 +249,88 @@ void rxinit() {
     write_comm(REG_RXDESCTAIL, E1000_NUM_RX_DESC-1);
     rx_cur = 0;
     write_comm(REG_RCTRL, RCTL_EN| RCTL_SBP| RCTL_UPE | RCTL_MPE | RCTL_LBM_NONE | RTCL_RDMTS_HALF | RCTL_BAM | RCTL_SECRC  | RCTL_BSIZE_8192);
-    
+}
+
+void txinit()
+{    
+    u8* ptr;
+    tx_desc *descs;
+    // Allocate buffer for receive descriptors. For simplicity, in my case khmalloc returns a virtual address that is identical to it physical mapped address.
+    // In your case you should handle virtual and physical addresses as the addresses passed to the NIC should be physical ones
+    ptr = (u8*)(k_malloc(sizeof(tx_desc)*E1000_NUM_TX_DESC + 16));
+
+    descs = (tx_desc *)ptr;
+    for(int i = 0; i < E1000_NUM_TX_DESC; i++)
+    {
+        tx_descs[i] = (tx_desc*)((u8*)descs + i*16);
+        tx_descs[i]->addr = 0;
+        tx_descs[i]->cmd = 0;
+        tx_descs[i]->status = TSTA_DD;
+    }
+
+    write_comm(REG_TXDESCHI, (u32)0 );
+    write_comm(REG_TXDESCLO, (u32)(ptr));
+
+    //now setup total length of descriptors
+    write_comm(REG_TXDESCLEN, E1000_NUM_TX_DESC * 16);
+
+    //setup numbers
+    write_comm( REG_TXDESCHEAD, 0);
+    write_comm( REG_TXDESCTAIL, 0);
+    tx_cur = 0;
+    write_comm(REG_TCTRL,  TCTL_EN
+        | TCTL_PSP
+        | (15 << TCTL_CT_SHIFT)
+        | (64 << TCTL_COLD_SHIFT)
+        | TCTL_RTLC);
+
+    write_comm(REG_TCTRL,  0b0110000000000111111000011111010);
+    write_comm(REG_TIPG,  0x0060200A);
+}
+
+void handle_recv() {
+    u16 old_cur;
+    bool got_packet = FALSE;
+
+    while((rx_descs[rx_cur]->status & 0x1))
+    {
+        got_packet = TRUE;
+        u8 *buf = (u8*)(u32) rx_descs[rx_cur]->addr;
+        u16 len = rx_descs[rx_cur]->length;
+
+        kprintf("buf addr = 0x%X, len = %u\n", buf, len);
+
+        rx_descs[rx_cur]->status = 0;
+        old_cur = rx_cur;
+        rx_cur = (rx_cur + 1) % E1000_NUM_RX_DESC;
+        write_comm(REG_RXDESCTAIL, old_cur );
+    }
+}
+
+void i8254_fire() {
+    write_comm(REG_IMASK, 0x1);
+    u32 status = read_comm(0xC0);
+    if(status & 0x04) {
+        // start_link(); // ?
+        kprintf("start link?\n");
+    } else if(status & 0x10) {
+        // good threshold
+        kprintf("good threshold\n");
+    } else if(status & 0x80) {
+        handle_recv();
+    }
+}
+
+bool send_packet(void *p_data, u16 p_len) {
+    tx_descs[tx_cur]->addr = (u32) p_data;
+    tx_descs[tx_cur]->length = p_len;
+    tx_descs[tx_cur]->cmd = CMD_EOP | CMD_IFCS | CMD_RS;
+    tx_descs[tx_cur]->status = 0;
+    u8 old_cur = tx_cur;
+    tx_cur = (tx_cur + 1) % E1000_NUM_TX_DESC;
+    write_comm(REG_TXDESCTAIL, tx_cur);   
+    while(!(tx_descs[old_cur]->status & 0xff));    
+    return 0;
 }
 
 void I8254_DriverEntry(Device *dev) {
@@ -280,16 +361,78 @@ void I8254_DriverEntry(Device *dev) {
         return;
     }
 
-    enable_ints();
-
-    rxinit();
-
     for(int i=0;i<0x80;i++)
         write_comm(0x5200+i*4, 0);
+    k_register_int((Driver*)dev->data, header.interrupt_line+0x20);
+    enable_ints();
+    rxinit();
+    txinit();
     
     kprintf("%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    // Send a DHCP Discover packet
+    u8 *packet = k_malloc(342);
+    // write destination MAC address (Broadcast)
+    packet[0] = 0xFF;
+    packet[1] = 0xFF;
+    packet[2] = 0xFF;
+    packet[3] = 0xFF;
+    packet[4] = 0xFF;
+    packet[5] = 0xFF;
+    // write source MAC address
+    packet[6] = mac[0];
+    packet[7] = mac[1];
+    packet[8] = mac[2];
+    packet[9] = mac[3];
+    packet[10] = mac[4];
+    packet[11] = mac[5];
+    // and the packet type (IP)
+    packet[12] = 0x80;
+    packet[13] = 0x00;
+    // IP Version & Header length
+    packet[14] = 0x45;
+    // (I have no idea what this is)
+    packet[15] = 0x00;
+    // total packet length (328)
+    packet[16] = 0x01;
+    packet[17] = 0x48;
+    // identification (this is a much better way to do this)
+    packet[18] = 0xAB;
+    packet[19] = 0xCD;
+    // flags and fragment offset
+    packet[20] = 0x00;
+    packet[21] = 0x00;
+    // ttl (255)
+    packet[22] = 0xFF;
+    // protocl (udp, 17)
+    packet[23] = 0x11;
+    // checksum (this'll probably be wrong; sue me)
+    packet[24] = 0xCF;
+    packet[25] = 0x57;
+    // source address
+    packet[26] = 0;
+    packet[27] = 0;
+    packet[28] = 0;
+    packet[29] = 0;
+    // destination address
+    packet[30] = 0xFF;
+    packet[31] = 0xFF;
+    packet[32] = 0xFF;
+    packet[33] = 0xFF;
+    // UDP source port (port 68)
+    packet[34] = 0x00;
+    packet[35] = 0x44;
+    // UDP destination port (port 67)
+    packet[36] = 0x00;
+    packet[37] = 0x43;
+    // UDP length
+    packet[38] = 0x01;
+    packet[39] = 0x34;
+
+    // FILL IN THE REST!
+    
 }
 
 void I8254_DriverInt(Device *dev, u8 intr) {
-
+    i8254_fire();
 }
