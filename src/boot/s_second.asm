@@ -2,8 +2,8 @@
 ;  1. be more verbose than the original bootloader
 ;  2. setup and run the kernel
 
-KERNEL_OFF  equ 0x9000
-KERNEL_LEN  equ 80
+KERNEL_OFF  equ 0x9000      ; Location where Kernel is loaded into memory
+KERNEL_LEN  equ 128         ; This will probably need updating
 
 ; this is where stuff the kernel cares about is stored
 ;  0x00: bios boot drive (1 byte)
@@ -18,7 +18,7 @@ curbuf      equ 0x9000
 second_stage:
     mov [KERNEL_DATA], dl
     
-    ; enable a20
+    ; enable a20 (this might not work on all machines)
     in al, 0x92
     test al, 2
     jnz .skip_a20
@@ -63,7 +63,7 @@ boot_kernel:
     cli
     lgdt [gdt_descriptor]
     mov eax, cr0
-    or eax, 1
+    or eax, 0x00000001 ; enable protected mode
     mov cr0, eax
     jmp CODE_SEG:init_32bit
 done:

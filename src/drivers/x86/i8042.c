@@ -323,6 +323,10 @@ void I8042_DriverInt(Device *dev, u8 int_id) {
     if(int_id == 0x21) { // KBD
         u8 scan = inb(0x60);
         // kprintf("Key Pressed %X\n",scan);
+        // puts_dbg("0x");
+        // puts_dbg(itoa(scan, 16));
+        // putc_dbg(' ');
+
         if(x & KBD_IGNORE) {
             if(scan == 0x53) { // Delete key
                 reset_cpu();

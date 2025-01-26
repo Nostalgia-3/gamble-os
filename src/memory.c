@@ -10,7 +10,6 @@ typedef struct _Allocation {
 } Allocation;
 
 static u8 blocks[MAX_BLOCKS/8];
-
 static Allocation allocs[MAX_ALLOCS];
 
 void init_mem() {
@@ -40,7 +39,7 @@ void push_alloc(u16 start, u16 length) {
 
 // BEHOLD: The first fit, mostly inefficient malloc function!!
 void *k_malloc(size_t size) {
-    u32 blocks_req = ceil((f32)size/(f32)BLOCK_SIZE);
+    u32 blocks_req = size/BLOCK_SIZE+1; // This isn't great but floats appear to just not work
 
     u16 p   = 0;
     u16 st  = 0;
@@ -58,16 +57,9 @@ void *k_malloc(size_t size) {
                 set_block_used(st+x, TRUE);
             }
 
-            // char *ret = itoa(MEM_BASE+BLOCK_SIZE*st, 16);
-            // putc_dbg('[');
-            // for(int i=0;i<strlen(ret);i++) putc_dbg(ret[i]);
-            // putc_dbg(']');
-
             return (void*)(MEM_BASE+BLOCK_SIZE*st);
         }
     }
-
-    // putc_dbg('/');
     
     return NULL;
 }

@@ -111,6 +111,10 @@ void idt_init() {
     idtr.limit = (u16)sizeof(idt_entry_t) * IDT_MAX_DESCRIPTORS - 1;
 
     t_move_pic(0x20, 0x28);
+    enable_IRQ(0x0); enable_IRQ(0x1); enable_IRQ(0x2); enable_IRQ(0x3);
+    enable_IRQ(0x4); enable_IRQ(0x5); enable_IRQ(0x6); enable_IRQ(0x7);
+    enable_IRQ(0x9); enable_IRQ(0x9); enable_IRQ(0xA); enable_IRQ(0xB);
+    enable_IRQ(0xC); enable_IRQ(0xD); enable_IRQ(0xE); enable_IRQ(0xF);
 
     for (u8 vector = 0; vector < 32; vector++) {
         idt_set_descriptor(vector, isr_stub_table[vector], 0x8E);
@@ -126,14 +130,14 @@ void idt_init() {
     idt_set_descriptor(80, sysint_handler_asm, 0b11101110);
 
     __asm__ volatile ("lidt %0" : : "m"(idtr)); // load the new IDT
-    __asm__ volatile ("sti"); // set the interrupt flag
+    __asm__ volatile ("sti");                   // set the interrupt flag
 }
 
 void idt_set_descriptor(u8 vector, void* isr, u8 flags) {
     idt_entry_t* descriptor = &idt[vector];
 
     descriptor->isr_low        = (u32)isr & 0xFFFF;
-    descriptor->kernel_cs      = 0x08*2; // bytes into the GDT (this is the code)
+    descriptor->kernel_cs      = 0x08; // bytes into the GDT (this is the code)
     descriptor->attributes     = flags;
     descriptor->isr_high       = (u32)isr >> 16;
     descriptor->reserved       = 0;

@@ -19,7 +19,7 @@
 #define MEM_BASE    0x00100000 // 0x60000
 #define MEM_END     0x00200000 // 0x7FFFF
 #define MEM_MAX     (MEM_END-MEM_BASE)
-#define BLOCK_SIZE  256      // 256
+#define BLOCK_SIZE  32      // 256
 #define MAX_BLOCKS  (u32)((MEM_MAX)/BLOCK_SIZE)
 
 #define MAX_ALLOCS  1234          // The max number of specific allocations

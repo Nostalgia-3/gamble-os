@@ -4,9 +4,16 @@
 #include <types.h>
 #include <gosh/common.h>
 
+enum GDEVT_Errors {
+    GDEVT_FAILED_KBD    = 1,
+    GDEVT_FAILED_VT     = 2,
+    GDEVT_FAILED_VT_DATA= 3,
+    GDEVT_FAILED_ALLOC  = 4
+};
+
 // Initialize the global device table. Don't call this unless you know what
-// you're doing.
-void _init_gdevt();
+// you're doing. Returns 0 if successful, otherwise an error code
+int _init_gdevt();
 
 // Get the global device table.
 Device* get_gdevt();

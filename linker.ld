@@ -1,10 +1,11 @@
 ENTRY(_load)
-OUTPUT_FORMAT(elf32-i386) /* binary */
+OUTPUT_FORMAT(binary)
+/* OUTPUT_FORMAT(elf32-i386) */
 /* STARTUP(build/a_kernel-entry.asm.o) */
 
 SECTIONS
 {
-  . = 2M;
+  . = 0x9000; /*2M;*/
   .text BLOCK(4K) : ALIGN(4K)
 	{
 		*(.multiboot)

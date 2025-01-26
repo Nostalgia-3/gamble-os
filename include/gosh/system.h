@@ -25,7 +25,9 @@ void    free_task(int id);
 #define KERNEL_ID 0x8008
 
 // Output a debug character to the serial port
+void initialize_serial();
 void putc_dbg(u8 c);
+void puts_dbg(const char *st);
 
 // Process interrupts for connected devices that care about them
 void k_handle_int(u8 int_id);

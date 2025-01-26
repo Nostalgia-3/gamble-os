@@ -27,25 +27,43 @@ void syscall_handler() {
 #include <shell.h>
 
 void _start() {
-    // while(1);
+    initialize_serial();
 
-    idt_init();
+    puts_dbg("Primary initialization...\n");
+    puts_dbg("  Initializing memory...\t\t");
     init_mem();
-    k_malloc(sizeof(Device));
+    // TODO: seriously figure out why this is needed for it not to crash on some hardware
+    // k_malloc(sizeof(Device));
+    puts_dbg("\x1b[32mOK\x1b[0m\n");
 
-    _init_gdevt();
-    if(get_gdevt() == NULL)
+    puts_dbg("  Initializing IDT...\t\t\t");
+    idt_init();
+    puts_dbg("\x1b[32mOK\x1b[0m\n");
+
+    puts_dbg("  Initializing GDevTable...\t\t");
+    int gde = _init_gdevt();
+    if(gde || get_gdevt() == NULL) {
+        puts_dbg("\x1b[31mFAILED(");
+        puts_dbg(itoa(gde, 10));
+        puts_dbg(")\x1b[0m\n");
         kpanic();
-    initialize_pci();
+    } else {
+        puts_dbg("\x1b[32mOK\x1b[0m\n");
+    }
 
+    puts_dbg("  Initializing PCI...\t\t\t");
+    initialize_pci();
+    puts_dbg("\x1b[32mOK\x1b[0m\n");
+
+    puts_dbg("  Loading drivers...\t\t\t");
     // Harcode some drivers for testing
     Driver DriverVGA        = { .name = "VGA.DRV",      .DriverEntry = VGA_DriverEntry, .data = (void*)(u32)0 };
     Driver DriverI8042      = { .name = "I8042.DRV",    .DriverEntry = I8042_DriverEntry, .DriverInt = I8042_DriverInt };
     Driver DriverATA_PIO    = { .name = "ATA.DRV",      .DriverEntry = ATA_DriverEntry, .DriverInt = ATA_DriverInt };
     Driver DriverPCI        = { .name = "PCI.DRV",      .DriverEntry = PCI_DriverEntry };
 
-    PCIDriver uhci = get_uhci_driver();
-    PCIDriver ac97 = get_ac97_driver();
+    PCIDriver uhci  = get_uhci_driver();
+    PCIDriver ac97  = get_ac97_driver();
     PCIDriver i8254 = get_i8254_driver();
 
     PCI_ADD(&uhci);
@@ -56,23 +74,37 @@ void _start() {
     load_driver(&DriverI8042);
     load_driver(&DriverATA_PIO);
     load_driver(&DriverPCI);
+    puts_dbg("\x1b[32mOK\x1b[0m\n");
+
+    puts_dbg("Primary initialization... \x1b[32mOK\x1b[0m\n");
 
     Device *fb = fb_get(RESOLUTION);
-    if(fb == NULL || fb->data == NULL) kpanic();
+    if(fb == NULL) {
+        puts_dbg("No available framebuffers...\n");
+    } else if(fb->data == NULL) {
+        puts_dbg("Framebuffer data is NULL!\n");
+    }
 
     Device *vt = k_get_device_by_type(DEV_VIRT_TERM);
-    if(vt == NULL || vt->data == NULL) kpanic();
+    if(vt == NULL || vt->data == NULL) {
+        puts_dbg("No virtual terminal!\n");
+        kpanic();
+    }
 
     if(!((u32)DriverI8042.data & 0b10000000)) {
-        kprintf("Failed to initialize PS/2 keyboard and mouse :(\n");
-        shell_write(vt); // hardcode this for now
+        puts_dbg("Failed to initialize PS/2 keyboard and mouse :(\n");
         while(1);
     }
 
-    kprintf("Debug Build (built with gcc v" __VERSION__ ")\n");
-    
+    kprintf("GaOS v0.1 (built with gcc v" __VERSION__ ")\n");
+
     if(shell_main(0))
         kpanic();
 
-    return;
+    while(1);
+
+    // if(shell_main(0))
+    //     kpanic();
+
+    // return;
 }

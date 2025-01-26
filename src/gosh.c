@@ -16,11 +16,40 @@ volatile u32 cursor = 0;
 
 #define DEBUG
 
+void initialize_serial() {
+    // COM1
+    outb(0x3F8 + 1, 0x00);    // Disable all interrupts
+    outb(0x3F8 + 3, 0x80);    // Enable DLAB (set baud rate divisor)
+    outb(0x3F8 + 0, 0x03);    // Set divisor to 3 (lo byte) 38400 baud
+    outb(0x3F8 + 1, 0x00);    //                  (hi byte)
+    outb(0x3F8 + 3, 0x03);    // 8 bits, no parity, one stop bit
+    outb(0x3F8 + 2, 0xC7);    // Enable FIFO, clear them, with 14-byte threshold
+    outb(0x3F8 + 4, 0x0B);    // IRQs enabled, RTS/DSR set
+    outb(0x3F8 + 4, 0x1E);    // Set in loopback mode, test the serial chip
+    outb(0x3F8 + 0, 0xAE);    // Test serial chip (send byte 0xAE and check if serial returns same byte)
+
+    // Check if serial is faulty (i.e: not same byte as sent)
+    if(inb(0x3F8 + 0) != 0xAE) {
+        return;
+    }
+
+    // If serial is not faulty set it in normal operation mode
+    // (not-loopback with IRQs enabled and OUT#1 and OUT#2 bits enabled)
+    outb(0x3F8 + 4, 0x0F);
+    // puts_dbg("\x1b[2J");
+    return;
+}
+
 #ifdef DEBUG
 void putc_dbg(u8 c) {
-    *(u8*)(0xB8000+((cursor+1)*2)-1) = 0x0F;
-    *(u8*)(0xB8000+cursor*2) = c;
-    cursor++;
+    while(inb(0x3F8 + 5) & 0x20 == 0);
+    if(c == '\n') putc_dbg('\r');
+    outb(0x3F8, c);
+}
+void puts_dbg(const char *st) {
+    do {
+        putc_dbg(*st++);
+    }while(*st != 0);
 }
 #else
 void putc_text(u8 c) {}
@@ -66,7 +95,7 @@ __attribute__((noreturn)) void kpanic() {
     // play_sound(1000);
     // wait(100);
     // nosound();
-    putc_dbg('k');
+    puts_dbg("\x1b[1;33mKernel panic!\x1b[0m\n");
     __asm__ volatile ("cli\n" "hlt":);
     while(1);
 }
@@ -76,12 +105,12 @@ __attribute__((noreturn)) void kpanic() {
 void pushc(u8 c) {
     if(c == 0) return;
     Device* dev = k_get_device_by_owner(KERNEL_ID, DEV_KEYBOARD);
-    if(dev == NULL) return;
+    if(dev == NULL) kpanic();
 
     KeyboardDeviceData* data = (KeyboardDeviceData*) dev->data;
-    if(data == NULL) return;
+    if(data == NULL) kpanic();
 
-    if(data->fifo_ind > sizeof(data->fifo)) return;
+    if(data->fifo_ind > sizeof(data->fifo)) kpanic();
     data->fifo[data->fifo_ind++] = c;
 }
 
@@ -108,10 +137,11 @@ u8 getc() {
 
 /*********************************** DEVICE ***********************************/
 
-void _init_gdevt() {
-    if(gdevt != NULL) return;
+int _init_gdevt() {
+    if(gdevt != NULL) return TRUE;
     gdevt_len = 128;
     gdevt = k_malloc(sizeof(Device)*gdevt_len);
+    if(gdevt == NULL) return GDEVT_FAILED_ALLOC;
     memset((void*)gdevt, 0, sizeof(Device)*gdevt_len);
     for(int i=0;i<gdevt_len;i++)
         gdevt[i].is_active = FALSE;
@@ -119,7 +149,7 @@ void _init_gdevt() {
     // standard keyboard output
     Device *kbd = k_add_dev(KERNEL_ID, DEV_KEYBOARD, 0);
     if(kbd == NULL) {
-        putc_dbg(':');
+        return GDEVT_FAILED_KBD;
     }
 
     Device *stdvt = k_add_dev(KERNEL_ID, DEV_VIRT_TERM, 0);
@@ -132,11 +162,15 @@ void _init_gdevt() {
                 vtdata->textlen = 6000;
             }
         } else {
-            putc_dbg('%');
+            // puts_dbg("VTDeviceData wasn't created!\n");
+            return GDEVT_FAILED_VT_DATA;
         }
     } else {
-        putc_dbg('^');
+        // puts_dbg("Failed to create stdout virtual terminal!\n");
+        return GDEVT_FAILED_VT;
     }
+
+    return 0;
 }
 
 Device* get_gdevt() {
@@ -169,7 +203,7 @@ Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code) {
 
     // no free devices
     if(id == 0) {
-        putc_dbg('@');
+        puts_dbg("No free devices left!\n");
         return NULL;
     }
 

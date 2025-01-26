@@ -69,7 +69,7 @@ yargs(Deno.args)
 .parseSync();
 
 function emulate(pargs: Record<string, unknown>) {
-    const output = m.scanDir('build', /.*\.iso/);
+    const output = m.scanDir('build', /.*\.os/);
 
     if(!output[0]) {
         console.error(`\x1b[31m/!\\\x1b[0m Couldn't find an image file`);
@@ -90,7 +90,7 @@ function emulate(pargs: Record<string, unknown>) {
         // PC Speaker
         `-machine pcspk-audiodev=speaker`,
         // E1000 network card
-        `-net nic,model=e1000`, // macaddr=00:11:22:33:44:55
+        `-net nic,model=e1000,macaddr=00:11:22:33:44:55`,
         `-net user`,
         // Add a generic usb device
         '-device qemu-xhci',
@@ -108,12 +108,13 @@ function emulate(pargs: Record<string, unknown>) {
 }
 
 function build(pargs: Record<string, unknown>) {
-    if(existsSync('build')) {
-        Deno.removeSync('build', { recursive: true });
+    if(!existsSync('build')) {
+        Deno.mkdirSync('build');
     }
 
-    Deno.mkdirSync('build');
-    Deno.mkdirSync('build/iso');
+    for(const bin of m.scanDir('build/', /\.os$/)) {
+        Deno.removeSync(bin);
+    }
 
     const assemblyFiles: string[] = m.scanDir('src/', /\.asm$/, /^s\_/).sort((a,b)=>a.charCodeAt(0)-b.charCodeAt(0));
     const cFiles: string[] = m.scanDir('src/', /\.c$/);
@@ -121,11 +122,18 @@ function build(pargs: Record<string, unknown>) {
     m.call(`${pargs.nasm} src/boot/s_main.asm -fbin -o ${MBR}`);
     m.call(`${pargs.nasm} src/boot/s_second.asm -fbin -o ${SECOND_STAGE}`);
     
-    for(const asm of assemblyFiles)
+    for(const asm of assemblyFiles) {
+        if(
+            !existsSync(`build/${m.ext(m.base(asm), '.asm.o')}`) || 
+            (Deno.statSync(`build/${m.ext(m.base(asm), '.asm.o')}`).mtime?.getTime() ?? 0) < (Deno.statSync(asm).mtime?.getTime() ?? 0))
         m.call(`${pargs.nasm} ${asm} -felf32 -o build/${m.ext(m.base(asm), '.asm.o')}`);
+    }
     
     for(const c of cFiles) {
-        m.call(`${pargs.gcc} -I ${INCLUDE} -O1 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
+        if(
+            !existsSync(`build/${m.ext(m.base(c), '.c.o')}`) ||
+            (Deno.statSync(`build/${m.ext(m.base(c), '.c.o')}`).mtime?.getTime() ?? 0) < (Deno.statSync(c).mtime?.getTime() ?? 0))
+        m.call(`${pargs.gcc} -I ${INCLUDE} -O2 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
     }
 
     const objs: string[] = [];
@@ -151,15 +159,17 @@ function build(pargs: Record<string, unknown>) {
     fBOOT.set(fSECOND, fMBR.length);
     fBOOT.set(fKERNEL, fMBR.length+fSECOND.length);
     
-    const outFile   = `${pargs.output ?? 'build/kernel'}${pargs['no-date'] ? '' : `-${date}`}.iso`;
+    const outFile   = `${pargs.output ?? 'build/kernel'}${pargs['no-date'] ? '' : `-${date}`}.os`;
+
+    Deno.writeFileSync(outFile, fBOOT);
 
     // Make a GRUB iso
-    Deno.mkdirSync('build/iso/sys');
-    Deno.mkdirSync('build/iso/boot/grub', { recursive: true });
-    Deno.copyFileSync('grub.cfg', 'build/iso/boot/grub/grub.cfg');
-    Deno.copyFileSync(KERNEL, 'build/iso/sys/kernel.bin');
+    // Deno.mkdirSync('build/iso/sys');
+    // Deno.mkdirSync('build/iso/boot/grub', { recursive: true });
+    // Deno.copyFileSync('grub.cfg', 'build/iso/boot/grub/grub.cfg');
+    // Deno.copyFileSync(KERNEL, 'build/iso/sys/kernel.bin');
 
-    m.call(`grub-mkrescue -o ${outFile} build/iso`);
+    // m.call(`grub-mkrescue -o ${outFile} build/iso`);
 
     emulate(pargs);
 }
