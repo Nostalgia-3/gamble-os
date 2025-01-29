@@ -1,0 +1,6 @@
+100% not absolute, but:
+
+Virtual addressing space:
+
+The kernel is always loaded at
+Kernel: 0xC0000000 - 0xFFFFFFFF

@@ -9,12 +9,12 @@
 Device* gdevt;
 u32 gdevt_len = 0;
 
-volatile u32 d_id = 0;
-volatile u32 cursor = 0;
+static u32 d_id = 0;
 
 /************************************ MISC ************************************/
 
 #define DEBUG
+static u32 cursor = 0;
 
 void initialize_serial() {
     // COM1
@@ -41,18 +41,72 @@ void initialize_serial() {
 }
 
 #ifdef DEBUG
-void putc_dbg(u8 c) {
-    while(inb(0x3F8 + 5) & 0x20 == 0);
-    if(c == '\n') putc_dbg('\r');
-    outb(0x3F8, c);
+
+// ansi:        black, red, green, yellow, blue, magenta, cyan, white, reset
+u8 ansi_to_text[] = { 0, 4, 2, 14, 1, 5, 3, 15, 7 };
+
+bool debug_write_to_stdout = TRUE;
+
+u8 ansi[64];
+u8 ab;
+bool in_ansi;
+u8 color = 7;
+
+void setcolor_dbg(u8 c) {
+    color = c;
 }
+
+void putc_dbg(u8 c) {
+    if(in_ansi) {
+        if(c == 'm') {
+            ansi[ab+1] = '\0';
+            if(ansi[1] == '3' && is_digit(ansi[2])) {
+                setcolor_dbg(ansi_to_text[ansi[2]-'0']);
+            } else if(ansi[1] == '0') {
+                setcolor_dbg(ansi_to_text[sizeof(ansi_to_text)-1]);
+            }
+            in_ansi = FALSE;
+            ab = 0;
+        } else {
+            ansi[ab++] = c;
+        }
+    } else {
+        if(c == '\x1b') {
+            in_ansi = TRUE;
+            ab = 0;
+        } else {
+            if(c == '\n') {
+                cursor += 80 - (cursor % 80);
+            } else if(c == '\t') {
+                cursor += 8 - (cursor % 8);
+            } else if(c != '\r' && debug_write_to_stdout) {
+                *(char*)(0xB8000+cursor*2) = c;
+                *(char*)(0xB8000+cursor*2+1) = color;
+                cursor++;
+            }
+        }
+    }
+
+    // while(inb(0x3F8 + 5) & 0x20 == 0);
+    // if(c == '\n') putc_dbg('\r');
+    // outb(0x3F8, c);
+}
+
 void puts_dbg(const char *st) {
+    in_ansi = FALSE; ab = 0; memset(ansi, 0, sizeof(ansi));
     do {
-        putc_dbg(*st++);
-    }while(*st != 0);
+        putc_dbg(*st);
+        st++;
+    } while(*st != 0);
+}
+
+void end_dbg_stdout() {
+    debug_write_to_stdout = FALSE;
 }
 #else
 void putc_text(u8 c) {}
+void end_dbg_stdout() {}
+void puts_dbg(const char *st) {}
 #endif
 
 // This is blatantly wrong and mildly disgusting (erego, perfect!)
@@ -138,7 +192,7 @@ u8 getc() {
 /*********************************** DEVICE ***********************************/
 
 int _init_gdevt() {
-    if(gdevt != NULL) return TRUE;
+    if(gdevt != NULL) return 0;
     gdevt_len = 128;
     gdevt = k_malloc(sizeof(Device)*gdevt_len);
     if(gdevt == NULL) return GDEVT_FAILED_ALLOC;

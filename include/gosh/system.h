@@ -28,6 +28,8 @@ void    free_task(int id);
 void initialize_serial();
 void putc_dbg(u8 c);
 void puts_dbg(const char *st);
+// Stop writing debugging to stdout
+void end_dbg_stdout();
 
 // Process interrupts for connected devices that care about them
 void k_handle_int(u8 int_id);

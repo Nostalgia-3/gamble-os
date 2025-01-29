@@ -1,22 +1,5 @@
 [bits 32]
 
-FLAGS       equ 0b11
-MAGIC       equ 0x1BADB002
-CHECKSUM    equ -(MAGIC + FLAGS)
-
-; multiboot header
-section .multiboot
-align 4
-dd MAGIC
-dd FLAGS
-dd CHECKSUM
-
-section .bss
-align 16
-stack_bottom:
-resb 16384
-stack_top:
-
 section .text
 
 extern _start
@@ -24,9 +7,15 @@ extern _start
 global _load
 _load:
     cli                     ; clear interrupts
-    lgdt [gdt_descriptor]
-    mov esp, stack_top      ; setup stack
-    mov ebp, esp
+    ; mov esp, stack_top      ; setup stack
+    ; mov ebp, esp
+
+    mov ah, '?'
+    mov [0xB8000], ah
+    
+    lgdt [gdt_descriptor]   ; setup the GDT
+    jmp CODE_SEG:.start
+.start:
     call _start             ; jump to the kernel _start function
     jmp $                   ; and if it ever returns, halt
 
@@ -54,3 +43,20 @@ gdt_descriptor:
 
 CODE_SEG equ gdt_code - gdt_start
 DATA_SEG equ gdt_data - gdt_start
+
+FLAGS       equ 0b11
+MAGIC       equ 0x1BADB002
+CHECKSUM    equ -(MAGIC + FLAGS)
+
+; multiboot header
+section .multiboot
+align 4
+dd MAGIC
+dd FLAGS
+dd CHECKSUM
+
+section .bss
+align 16
+stack_bottom:
+resb 16384
+stack_top:

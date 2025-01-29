@@ -2,15 +2,17 @@
 ;  1. be more verbose than the original bootloader
 ;  2. setup and run the kernel
 
-KERNEL_OFF  equ 0x9000      ; Location where Kernel is loaded into memory
-KERNEL_LEN  equ 128         ; This will probably need updating
+LOAD_KERNEL_OFF equ 0x9000      ; Location where Kernel is loaded into memory
+KERNEL_LEN      equ 120         ; This will probably need updating
+KERNEL_REAL_LEN equ 61440       ; 65536
+
+KERNEL_OFF      equ 0x01000000  ; The address the kernel is copied to
 
 ; this is where stuff the kernel cares about is stored
 ;  0x00: bios boot drive (1 byte)
 ;  0x01: selected video mode (1 byte)
 ;  0x02: memory segment count (2 bytes)
 KERNEL_DATA equ 0x500
-curbuf      equ 0x9000
 
 [bits 16]
 [org 0x7E00]
@@ -32,12 +34,12 @@ select_video:
 get_input: ; make this better at some point
     mov ah, 0x00
     int 16h
-    cmp al, '1'
-    je vga_text_mode
-    cmp al, '2'
-    je mode_13h
-    cmp al, '3'
-    je mode_12h
+    ; cmp al, '1'
+    ; je vga_text_mode
+    ; cmp al, '2'
+    ; je mode_13h
+    ; cmp al, '3'
+    ; je mode_12h
 
     jmp vga_text_mode ; default
 mode_12h:
@@ -149,25 +151,11 @@ print:
     popa
     ret
 
-[bits 32]
-
-init_32bit:
-    mov ax, DATA_SEG
-    mov ds, ax
-    mov ss, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-
-    mov ebp, 0x90000
-    mov esp, ebp
-
-    jmp KERNEL_OFF
-
 hello: db "Video Modes", 13, 10, \
     " 1) 80x25 Text @ 16  Color (recommended, default)", 13, 10, \
-    " 2) 320x200    @ 256 Color", 13, 10, \
-    " 3) 640x480    @ 16  Color", 13, 10, 0
+    0
+    ; " -) 320x200    @ 256 Color (disabled)", 13, 10, \
+    ; " -) 640x480    @ 16  Color (disabled)", 13, 10, 0
 
 unknown:        db "Unknown command", 13, 10, 0
 failed_disk:    db "Failed to load the kernel from the disk!", 13, 10, 0
@@ -185,14 +173,16 @@ kern_dapack:
 blkcnt:
     dw KERNEL_LEN
 db_add:
-    dw KERNEL_OFF
+    dw LOAD_KERNEL_OFF
     dw 0
 d_lba:
     dd 5 ; read from (first + second = 5)
     dd 0
 
 gdt_start:
-    dq 0x0
+gdt_null:
+    dd 0
+    dd 0
 gdt_code:
     dw 0xFFFF       ; segment limit     (bits  0-15)
     dw 0x0          ; segment base      (bits  16-31)
@@ -215,5 +205,28 @@ gdt_descriptor:
 
 CODE_SEG equ gdt_code - gdt_start
 DATA_SEG equ gdt_data - gdt_start
+
+[bits 32]
+
+init_32bit:
+    jmp CODE_SEG:.data_seg
+.data_seg:
+    mov ax, DATA_SEG
+    mov ds, ax
+    mov ss, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    mov ebp, 0x90000
+    mov esp, ebp
+
+    ; copy the kernel from LOAD_KERNEL_OFF to KERNEL_OFF
+    mov esi, LOAD_KERNEL_OFF
+    mov edi, KERNEL_OFF
+    mov ecx, KERNEL_REAL_LEN
+    rep movsb
+
+    jmp KERNEL_OFF
 
 times 0x800 - ($-$$) db 0

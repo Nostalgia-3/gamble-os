@@ -34,4 +34,12 @@ int k_get_used();
 
 void memcpy(void*dest, void*src, size_t num);
 
+// #define PAGE_SIZE   4096
+
+// // Allocate PAGE_SIZE bytes of memory
+// void* alloc_page();
+
+// // Free a page
+// void free_page(void* page);
+
 #endif

@@ -26,24 +26,66 @@
 #define ICW4_SFNM       0x10        /* Special fully nested (not) */
 
 __attribute__((aligned(16))) static idt_entry_t idt[IDT_MAX_DESCRIPTORS];
-static idtr_t idtr;
 static bool vectors[IDT_MAX_DESCRIPTORS];
 
-#include <str.h>
-void exception_handler(u8 d) {
-    putc_dbg('E');
-    putc_dbg('(');
-    u8* st = itoa(d, 10);
-    for(int i=0;i<strlen(st);i++) {
-        putc_dbg(st[i]);
-    }
-    putc_dbg(')');
+static idtr_t idtr;
 
+const char* exception_messages[] = 
+{
+	"Division By Zero",
+	"Debug",
+	"Non Maskable Interrupt",
+	"Breakpoint",
+	"Into Detected Overflow",
+	"Out of Bounds",
+	"Invalid Opcode",
+	"No Coprocessor",
+	"Double Fault",
+	"Coprocessor Segment Overrun",
+	"Bad TSS",
+	"Segment Not Present",
+	"Stack Fault",
+	"General Protection Fault",
+	"Page Fault",
+	"Unknown Interrupt",
+	"Coprocessor Fault",
+	"Alignment Check",
+	"Machine Check",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved"
+};
+
+#include <str.h>
+void exception_handler(struct regs d) {
+    puts_dbg("Exception \"");
+    puts_dbg(exception_messages[d.err]);
+    puts_dbg("\" called\n  eax = ");
+    puts_dbg(itoa(d.eax, 16));
+    puts_dbg(" ebx = ");
+    puts_dbg(itoa(d.ebx, 16));
+    puts_dbg(" ecx = ");
+    puts_dbg(itoa(d.ecx, 16));
+    puts_dbg(" edx = ");
+    puts_dbg(itoa(d.edx, 16));
+    puts_dbg("\n  eip = ");
+    puts_dbg(itoa(d.eip, 16));
+    putc_dbg('\n');
     
     __asm__ volatile (
-        "cli\n hlt":
+        "cli":
     ); // Completely hangs the computer
-    while(1) __asm__ volatile("hlt"); // <-- this is to make the compiler shut up
+    while(1) __asm__ volatile("hlt");
 }
 
 static bool vectors[IDT_MAX_DESCRIPTORS];
@@ -51,6 +93,7 @@ static bool vectors[IDT_MAX_DESCRIPTORS];
 extern void* isr_stub_table[];
 extern void* irq_handle_table[16];
 extern void sysint_handler_asm();
+extern void _idt_load();
 
 void disable_IRQ(u8 IRQline) {
     u16 port;

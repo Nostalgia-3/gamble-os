@@ -26,9 +26,17 @@ typedef struct {
 	u32	base;
 } __attribute__((packed)) idtr_t;
 
-__attribute__((noreturn)) void exception_handler(u8 d);
+struct regs {
+    int err;
+    unsigned int edi, esi, ebp, esp, ebx, edx, ecx, eax;  /* pushed by 'pusha' */
+    unsigned int eip, cs, eflags, useresp, ss;   /* pushed by the processor automatically */ 
+};
+
+__attribute__((noreturn)) void exception_handler(struct regs d);
 
 void idt_init(void);
 void idt_set_descriptor(u8 vector, void* isr, u8 flags);
+
+extern void test_func();
 
 #endif

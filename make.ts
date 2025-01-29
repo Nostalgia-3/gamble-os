@@ -69,7 +69,7 @@ yargs(Deno.args)
 .parseSync();
 
 function emulate(pargs: Record<string, unknown>) {
-    const output = m.scanDir('build', /.*\.os/);
+    const output = m.scanDir('build', /.*\.iso/);
 
     if(!output[0]) {
         console.error(`\x1b[31m/!\\\x1b[0m Couldn't find an image file`);
@@ -84,7 +84,7 @@ function emulate(pargs: Record<string, unknown>) {
         // Primary drive
         `-drive file=${output},format=raw,media=disk,index=0`,
         // Secondary drive
-        `-drive file=./disk.img,format=raw,media=disk,index=1`,
+        `-drive if=none,file=./disk.img,format=raw,id=stick`,
         // AC97 audio card
         `-audio driver=sdl,model=ac97,id=speaker`,
         // PC Speaker
@@ -92,12 +92,12 @@ function emulate(pargs: Record<string, unknown>) {
         // E1000 network card
         `-net nic,model=e1000,macaddr=00:11:22:33:44:55`,
         `-net user`,
-        // Add a generic usb device
-        '-device qemu-xhci',
+        // USB 2.0
+        '-device usb-ehci,id=ehci',
+        // USB storage device
+        '-device usb-storage,bus=ehci.0,drive=stick',
         // RAM
         `-m 512M`,
-        // Give information about interrupts
-        // `-d int`
     ];
 
     if(pargs.exip == undefined) {
@@ -112,7 +112,11 @@ function build(pargs: Record<string, unknown>) {
         Deno.mkdirSync('build');
     }
 
-    for(const bin of m.scanDir('build/', /\.os$/)) {
+    if(!existsSync('build/iso')) {
+        Deno.mkdirSync('build/iso');
+    }
+
+    for(const bin of m.scanDir('build/', /\.iso$/)) {
         Deno.removeSync(bin);
     }
 
@@ -159,17 +163,17 @@ function build(pargs: Record<string, unknown>) {
     fBOOT.set(fSECOND, fMBR.length);
     fBOOT.set(fKERNEL, fMBR.length+fSECOND.length);
     
-    const outFile   = `${pargs.output ?? 'build/kernel'}${pargs['no-date'] ? '' : `-${date}`}.os`;
+    const outFile   = `${pargs.output ?? 'build/kernel'}${pargs['no-date'] ? '' : `-${date}`}.iso`;
 
-    Deno.writeFileSync(outFile, fBOOT);
+    // Deno.writeFileSync(outFile, fBOOT);
 
     // Make a GRUB iso
-    // Deno.mkdirSync('build/iso/sys');
-    // Deno.mkdirSync('build/iso/boot/grub', { recursive: true });
-    // Deno.copyFileSync('grub.cfg', 'build/iso/boot/grub/grub.cfg');
-    // Deno.copyFileSync(KERNEL, 'build/iso/sys/kernel.bin');
+    if(!existsSync('build/iso/sys')) Deno.mkdirSync('build/iso/sys');
+    if(!existsSync('build/iso/boot/grub')) Deno.mkdirSync('build/iso/boot/grub', { recursive: true });
+    Deno.copyFileSync('grub.cfg', 'build/iso/boot/grub/grub.cfg');
+    Deno.copyFileSync(KERNEL, 'build/iso/sys/kernel.bin');
 
-    // m.call(`grub-mkrescue -o ${outFile} build/iso`);
+    m.call(`grub-mkrescue -o ${outFile} build/iso`);
 
     emulate(pargs);
 }
