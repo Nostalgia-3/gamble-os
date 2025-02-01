@@ -5,7 +5,7 @@
 #include <drivers/pci.h>
 
 PCIDriver get_rtl8139_driver();
-void RTL8139_DriverEntry(Device *dev);
+int RTL8139_DriverEntry(Device *dev);
 void RTL8139_DriverInt(Device *dev, u8 intr);
 
 #endif

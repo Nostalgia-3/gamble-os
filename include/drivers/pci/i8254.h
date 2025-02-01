@@ -5,7 +5,7 @@
 #include <drivers/pci.h>
 
 PCIDriver get_i8254_driver();
-void I8254_DriverEntry(Device *dev);
+int I8254_DriverEntry(Device *dev);
 void I8254_DriverInt(Device *dev, u8 intr);
 
 #endif

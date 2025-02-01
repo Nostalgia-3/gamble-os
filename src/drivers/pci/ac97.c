@@ -107,7 +107,7 @@ PCIDriver get_ac97_driver() {
     };
 }
 
-void AC97_DriverEntry(Device *dev) {
+int AC97_DriverEntry(Device *dev) {
     Driver* driver = (Driver*)dev->data;
     u32 d = (u32)driver->data;
     u8 bus = d & 0xFF;
@@ -150,6 +150,8 @@ void AC97_DriverEntry(Device *dev) {
     }
 
     outl(nabm + PO_BDBAR, (u32)buf_mem);
+
+    return DRIVER_SUCCESS;
 
     // kprintf("int pin = %u, int line = %u\n", header.interrupt_pin, header.interrupt_line);
     // kprintf("PO_SR = %04X\n", inw((u16)(nabm) + PO_SR));

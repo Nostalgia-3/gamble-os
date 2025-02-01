@@ -15,7 +15,7 @@ PCIDriver get_ehci_driver() {
     };
 }
 
-void ECHIDriverEntry(Device *dev) {
+int ECHIDriverEntry(Device *dev) {
     Driver* driver = (Driver*)dev->data;
     u32 d = (u32)driver->data;
 
@@ -23,6 +23,7 @@ void ECHIDriverEntry(Device *dev) {
     u8 slot = (d >> 8) & 0xFF;
 
     kprintf("ECHI detected (pci bus = %u, pci slot = %u)\n", bus, slot);
+    return DRIVER_SUCCESS;
 }
 
 void ECHIDriverInt(Device *dev, u8 intr) {

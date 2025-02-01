@@ -13,8 +13,9 @@ PCIDriver get_rtl8139_driver() {
     };
 }
 
-void RTL8139_DriverEntry(Device *dev) {
-    
+int RTL8139_DriverEntry(Device *dev) {
+    kprintf("RTL8139!\n");
+    return DRIVER_SUCCESS;
 }
 
 void RTL8139_DriverInt(Device *dev, u8 intr) {

@@ -21,6 +21,7 @@ u32 atoi(char*);
 // Convert an ascii base-16 number to an int
 u32 hatoi(char*);
 
+#define is_letter(c) ((((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z')) ? TRUE : FALSE)
 #define is_printable(c) (((c) >= 32 && (c) <= 126) ? TRUE : FALSE)
 #define is_digit(c) (((c) >= '0' && (c) <= '9') ? TRUE : FALSE)
 

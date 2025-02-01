@@ -92,12 +92,14 @@ void putc_dbg(u8 c) {
     // outb(0x3F8, c);
 }
 
+#include <gosh/pipe.h>
 void puts_dbg(const char *st) {
     in_ansi = FALSE; ab = 0; memset(ansi, 0, sizeof(ansi));
-    do {
-        putc_dbg(*st);
-        st++;
-    } while(*st != 0);
+    write(STDOUT, (void*)st, strlen((char*)st));
+    // do {
+    //     putc_dbg(*st);
+    //     st++;
+    // } while(*st != 0);
 }
 
 void end_dbg_stdout() {
@@ -206,24 +208,6 @@ int _init_gdevt() {
         return GDEVT_FAILED_KBD;
     }
 
-    Device *stdvt = k_add_dev(KERNEL_ID, DEV_VIRT_TERM, 0);
-    if(stdvt != NULL) {
-        VTDeviceData* vtdata = stdvt->data;
-        if(vtdata != NULL) {
-            vtdata->text = k_malloc(6000);
-            if(vtdata->text != NULL) {
-                memset(vtdata->text, 0, 6000);
-                vtdata->textlen = 6000;
-            }
-        } else {
-            // puts_dbg("VTDeviceData wasn't created!\n");
-            return GDEVT_FAILED_VT_DATA;
-        }
-    } else {
-        // puts_dbg("Failed to create stdout virtual terminal!\n");
-        return GDEVT_FAILED_VT;
-    }
-
     return 0;
 }
 
@@ -287,12 +271,6 @@ Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code) {
             memset(gdevt[ind].data, 0, sizeof(FBDeviceData));
         break;
 
-        case DEV_VIRT_TERM:
-            gdevt[ind].data = k_malloc(sizeof(VTDeviceData));
-            if(gdevt[ind].data == NULL) return NULL;
-            memset(gdevt[ind].data, 0, sizeof(VTDeviceData));
-        break;
-
         case DEV_MOUSE:
             gdevt[ind].data = k_malloc(sizeof(MouseDeviceData));
             if(gdevt[ind].data == NULL) return NULL;
@@ -340,16 +318,21 @@ Device* k_get_device_by_type(enum DeviceType type) {
 
 /*********************************** DRIVER ***********************************/
 
-u32 load_driver(Driver *driver) {
+int load_driver(Driver *driver) {
     if(driver == NULL) return 0;
+
+    char *name = driver->name;
+    if(name == NULL) name = "Unknown";
+    kprintf("[\x1b[92m+\x1b[0m] Loaded driver \"%s\"\n", name);
 
     Device *dev = k_add_dev(KERNEL_ID, DEV_DRIVER, 0);
     if(dev == NULL) return 0;
     driver->r_id = dev->id;
     dev->data = driver;
-    if(driver->DriverEntry != NULL)
-        driver->DriverEntry(dev);
-    return driver->r_id;
+    if(driver->DriverEntry != NULL) {
+        return driver->DriverEntry(dev);
+    }
+    return 0;
 }
 
 /************************************ INTS ************************************/
@@ -811,25 +794,16 @@ void fb_clear(Device *fb, u32 color) {
 
 /****************************** VIRTUAL TERMINAL ******************************/
 
-Device *stdvt() {
-    return k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
+// Device *stdvt() {
+//     return k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
+// }
+
+void putcnoup(u8 key) {
+    write(STDOUT, &key, 1);
 }
 
-void putcnoup(Device *vt, u8 key) {
-    VTDeviceData* data = (VTDeviceData*) vt->data;
-    if(data->textind+1 > data->textlen) return;
-    if(key == '\b') {
-        data->textind--;
-        memset(data->text+data->textind, 0, data->textlen-data->textind);
-    } else {
-        data->text[data->textind++] = key;
-    }
-}
-
-void putsnoup(Device *vt, u8 *st) {
-    for(int i=0;i<strlen(st);i++) {
-        putcnoup(vt, st[i]);
-    }
+void putsnoup(u8 *st) {
+    write(STDOUT, st, strlen(st));
 }
 
 char* __int_str(u32 i, char b[], int base, bool plusSignIfNeeded, bool spaceSignIfNeeded,
@@ -897,9 +871,6 @@ char* __int_str(u32 i, char b[], int base, bool plusSignIfNeeded, bool spaceSign
 }
 
 void v_kprintf(const char *format, va_list list) {
-    Device *vt = k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
-    if(vt == NULL) return; // no virtual terminal?
-
     u32 chars = 0;
     char intStrBuffer[256] = {0};
 
@@ -1000,7 +971,8 @@ void v_kprintf(const char *format, va_list list) {
                 base = 8;
                 specifier = 'u';
                 if (altForm) {
-                    putcnoup(vt, '0');
+                    u8 s = '0';
+                    write(STDOUT, &s, 1);
                 }
             }
             if (specifier == 'p') {
@@ -1014,7 +986,7 @@ void v_kprintf(const char *format, va_list list) {
                 case 'x':
                     base = base == 10 ? 17 : base;
                     if (altForm) {
-                        putsnoup(vt, "0x");
+                        write(STDOUT, "0x", 2);
                     }
                     
                 case 'u':
@@ -1024,56 +996,56 @@ void v_kprintf(const char *format, va_list list) {
                         {
                             unsigned int integer = va_arg(list, unsigned int);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            putsnoup(vt, intStrBuffer);
+                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'H':
                         {
                             unsigned char integer = (unsigned char) va_arg(list, unsigned int);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            putsnoup(vt, intStrBuffer);
+                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'h':
                         {
                             unsigned short int integer = va_arg(list, unsigned int);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            putsnoup(vt, intStrBuffer);
+                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'l':
                         {
                             unsigned long integer = va_arg(list, unsigned long);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            putsnoup(vt, intStrBuffer);
+                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'q':
                         {
                             unsigned long long integer = va_arg(list, unsigned long long);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            putsnoup(vt, intStrBuffer);
+                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'j':
                         {
                             u32 integer = va_arg(list, u32);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            putsnoup(vt, intStrBuffer);
+                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'z':
                         {
                             size_t integer = va_arg(list, size_t);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            putsnoup(vt, intStrBuffer);
+                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 't':
                         {
                             ptrdiff_t integer = va_arg(list, ptrdiff_t);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            putsnoup(vt, intStrBuffer);
+                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         default:
@@ -1090,56 +1062,56 @@ void v_kprintf(const char *format, va_list list) {
                     {
                         int integer = va_arg(list, int);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        putsnoup(vt, intStrBuffer);
+                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'H':
                     {
                         signed char integer = (signed char) va_arg(list, int);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        putsnoup(vt, intStrBuffer);
+                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'h':
                     {
                         short int integer = va_arg(list, int);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        putsnoup(vt, intStrBuffer);
+                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'l':
                     {
                         long integer = va_arg(list, long);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        putsnoup(vt, intStrBuffer);
+                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'q':
                     {
                         long long integer = va_arg(list, long long);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        putsnoup(vt, intStrBuffer);
+                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'j':
                     {
                         u32 integer = va_arg(list, u32);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        putsnoup(vt, intStrBuffer);
+                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'z':
                     {
                         size_t integer = va_arg(list, size_t);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        putsnoup(vt, intStrBuffer);
+                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 't':
                     {
                         ptrdiff_t integer = va_arg(list, ptrdiff_t);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        putsnoup(vt, intStrBuffer);
+                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     default:
@@ -1151,9 +1123,9 @@ void v_kprintf(const char *format, va_list list) {
                 case 'c':
                 {
                     if (length == 'l') {
-                        putcnoup(vt, va_arg(list, wint_t));
+                        putcnoup(va_arg(list, wint_t));
                     } else {
-                        putcnoup(vt, va_arg(list, int));
+                        putcnoup(va_arg(list, int));
                     }
                     
                     break;
@@ -1161,7 +1133,7 @@ void v_kprintf(const char *format, va_list list) {
                     
                 case 's':
                 {
-                    putsnoup(vt, va_arg(list, char*));
+                    putsnoup(va_arg(list, char*));
                     break;
                 }
                     
@@ -1229,7 +1201,7 @@ void v_kprintf(const char *format, va_list list) {
                     __int_str(floating, intStrBuffer, base, plusSign, spaceNoSign, form, \
                               leftJustify, zeroPad);
                     
-                    putsnoup(vt, intStrBuffer);
+                    write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                     
                     floating -= (int) floating;
                     
@@ -1239,12 +1211,12 @@ void v_kprintf(const char *format, va_list list) {
                     u32 decPlaces = (u32) (floating + 0.5);
                     
                     if (precSpec) {
-                        putcnoup(vt, '.');
+                        putcnoup('.');
                         __int_str(decPlaces, intStrBuffer, 10, FALSE, FALSE, 0, FALSE, FALSE);
                         intStrBuffer[precSpec] = 0;
-                        putsnoup(vt, intStrBuffer);
+                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
                     } else if (altForm) {
-                        putcnoup(vt, '.');
+                        putcnoup('.');
                     }
                     
                     break;
@@ -1261,18 +1233,18 @@ void v_kprintf(const char *format, va_list list) {
             }
             
             if (specifier == 'e') {
-                putsnoup(vt, "e+");
+                putsnoup("e+");
             } else if (specifier == 'E') {
-                putsnoup(vt, "E+");
+                putsnoup("E+");
             }
             
             if (specifier == 'e' || specifier == 'E') {
                 __int_str(expo, intStrBuffer, 10, FALSE, FALSE, 2, FALSE, TRUE);
-                putsnoup(vt, intStrBuffer);
+                write(STDOUT, intStrBuffer, strlen(intStrBuffer));
             }
             
         } else {
-            putcnoup(vt, format[i]);
+            write(STDOUT, (char*)format+i, 1);
         }
     }
 }
@@ -1284,88 +1256,12 @@ void update(Device *vt) {
 }
 
 __attribute__ ((format (printf, 1, 2))) void kprintf(const char* format, ...) {
-    Device *vt = k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
-    if(vt == NULL) return;
+    // Device *vt = k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
+    // if(vt == NULL) return;
     va_list list;
     va_start (list, format);
     v_kprintf(format, list);
     va_end (list);
-
-    if(((VTDeviceData*)vt->data)->write_handler)
-        ((VTDeviceData*)vt->data)->write_handler(vt);
-}
-
-__attribute__ ((format (printf, 1, 2))) void kprintfnoup(const char* format, ...) {
-    Device *vt = k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
-    if(vt == NULL) return;
-    va_list list;
-    va_start (list, format);
-    v_kprintf(format, list);
-    va_end (list);
-}
-
-void puts_vt(Device *vt, u8* str) {
-    if(vt == NULL || vt->type != DEV_VIRT_TERM || vt->data == NULL) return;
-
-    for(size_t i=0;i<strlen(str);i++) {
-        putcnoup(vt, str[i]);
-    }
-
-    if(((VTDeviceData*)vt->data)->write_handler)
-        ((VTDeviceData*)vt->data)->write_handler(vt);
-}
-
-void putc_vt(Device *vt, u8 key) {
-    if(vt == NULL || vt->type != DEV_VIRT_TERM || vt->data == NULL) return;
-
-    putcnoup(vt, key);
-
-    if(((VTDeviceData*)vt->data)->write_handler)
-        ((VTDeviceData*)vt->data)->write_handler(vt);
-}
-
-void input_vt(Device *vt, u8 key) {
-    if(vt == NULL || vt->type != DEV_VIRT_TERM || vt->data == NULL) return;
-
-    VTDeviceData* vtd = (VTDeviceData*)vt->data;
-    
-    if(vtd->infifo_ind > vtd->infifo_len) return;
-    vtd->infifo[vtd->infifo_ind++] = key;
-}
-
-u8 readc_vt(Device *vt) {
-    if(vt == NULL || vt->type != DEV_VIRT_TERM || vt->data == NULL) return 0;
-
-    VTDeviceData* data = (VTDeviceData*) vt->data;
-    u8 k = data->infifo[0];
-    if(k == 0) return 0;
-
-    memcpy(data->infifo, data->infifo+1, sizeof(data->infifo)-1);
-    if(data->infifo_ind != 0) data->infifo_ind--;
-
-    return k;
-}
-
-void flush_vt(Device *vt) {
-    if(vt == NULL || vt->type != DEV_VIRT_TERM) {
-        return;
-    }
-
-    VTDeviceData* data = (VTDeviceData*) vt->data;
-    memset(data->text, 0, data->textlen);
-    data->textind = 0;
-}
-
-void vt_shift(Device *vt, u32 count) {
-    if(vt == NULL || vt->type != DEV_VIRT_TERM) {
-        return;
-    }
-
-    VTDeviceData* data = (VTDeviceData*) vt->data;
-    memcpy(data->text, data->text+count, data->textlen - count);
-    // Make sure the count bytes at the end are zero
-    memset(data->text+data->textind, 0, count);
-    data->textind-=count;
 }
 
 /*********************************** DRIVES ***********************************/
@@ -1448,16 +1344,11 @@ bool mount_drive(Device *drive, char* path) {
     if(bpb->jmp[0] != 0xEB || bpb->jmp[2] != 0x90) goto fail;
     if(bpb->total_secs != 0) goto fail;
 
-    for(int i=0;i<8;i++) {
-        putc_vt(stdvt(), bpb->oem[i]);
-    }
-    putc_vt(stdvt(), '\n');
+    write(STDOUT, bpb->oem, 8);
 
     // kprintf("sector count: %u\n", bpb->large_sec_count);
-    for(int i=0;i<11;i++) {
-        putc_vt(stdvt(), bpb->volume_label[i]);
-    }
-    putc_vt(stdvt(), '\n');
+    write(STDOUT, bpb->volume_label, 11);
+    kprintf("\n");
 
     k_free(bpb);
     return TRUE;

@@ -5,7 +5,7 @@
 #include <gosh/gosh.h>
 
 PCIDriver get_uhci_driver();
-void UCHIDriverEntry(Device *dev);
+int UCHIDriverEntry(Device *dev);
 void UCHIDriverInt(Device *dev, u8 intr);
 
 #endif

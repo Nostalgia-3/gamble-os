@@ -116,7 +116,7 @@ typedef struct _tx_desc {
         volatile u16 special;
 } __attribute__((packed)) tx_desc;
 
-static Driver driver = (Driver) { .DriverEntry = I8254_DriverEntry, .DriverInt = I8254_DriverInt };
+static Driver driver = (Driver) { .name = "I8254.DRV", .DriverEntry = I8254_DriverEntry, .DriverInt = I8254_DriverInt };
 
 PCIDriver get_i8254_driver() {
     return (PCIDriver) {
@@ -333,7 +333,7 @@ bool send_packet(void *p_data, u16 p_len) {
     return 0;
 }
 
-void I8254_DriverEntry(Device *dev) {
+int I8254_DriverEntry(Device *dev) {
     Driver* driver = (Driver*)dev->data;
     u32 d = (u32)driver->data;
     u8 bus = d & 0xFF;
@@ -358,7 +358,7 @@ void I8254_DriverEntry(Device *dev) {
     detect_eeprom();
     if(!read_mac_addr()) {
         kprintf("Fatal(i8254): Unable to read mac address\n");
-        return;
+        return DRIVER_FAILED;
     }
 
     for(int i=0;i<0x80;i++)
@@ -430,7 +430,7 @@ void I8254_DriverEntry(Device *dev) {
     packet[39] = 0x34;
 
     // FILL IN THE REST!
-    
+    return DRIVER_SUCCESS;
 }
 
 void I8254_DriverInt(Device *dev, u8 intr) {

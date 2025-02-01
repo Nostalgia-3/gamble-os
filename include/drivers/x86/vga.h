@@ -4,8 +4,12 @@
 #include <gosh/gosh.h>
 #include "types.h"
 
-void VGA_DriverEntry(Device *dev);
+int VGA_DriverEntry(Device *dev);
 
+void vga_write(char *st, size_t len);
+void vga_scroll_down();
 void vga_set_cursor(u16 x, u16 y);
+u16  vga_get_cursor_x();
+u16  vga_get_cursor_y();
 
 #endif

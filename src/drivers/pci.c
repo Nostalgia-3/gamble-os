@@ -25,9 +25,15 @@ void PCI_ADD(PCIDriver* opt) {
     drivers[next++] = opt;
 }
 
-void PCI_DriverEntry(Device *dev) {
-    if(!initialized) return;
-    if(drivers == NULL) return;
+int PCI_DriverEntry(Device *dev) {
+    if(!initialized) {
+        initialize_pci();
+        return DRIVER_SUCCESS;
+    }
+    
+    if(drivers == NULL) return DRIVER_FAILED;
+
+    kprintf("Driver address: %X\n", drivers);
 
     for(int i=0;i<256;i++) {
         for(int x=0;x<32;x++) {
@@ -50,8 +56,10 @@ void PCI_DriverEntry(Device *dev) {
                     drivers[z]->driver->data = (void*)((u32)((u8)x << 8) | ((u8)i));
                     load_driver(drivers[z]->driver);
                 } else
-                    kprintf("VGA Driver #%u is NULL!\n", drivers[z]->vendor);
+                    kprintf("PCI driver #%u is NULL!\n", drivers[z]->vendor);
             }
         }
     }
+
+    return DRIVER_SUCCESS;
 }

@@ -28,6 +28,6 @@ void initialize_pci();
 // Add a driver to the PCI list, with options
 void PCI_ADD(PCIDriver* driver);
 
-void PCI_DriverEntry(Device *dev);
+int PCI_DriverEntry(Device *dev);
 
 #endif

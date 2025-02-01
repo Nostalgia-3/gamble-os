@@ -22,13 +22,10 @@ Device *stdvt();
 
 // Write a character to the virtual terminal's stdout, without updating the
 // virtual terminal
-void putcnoup(Device *vt, u8 key);
+void putcnoup(u8 key);
 // Write a string to the virtual terminal's stdout, without updating the virtual
 // terminal
-void putsnoup(Device *vt, u8 *st);
-
-// Send an update reqeuest to the virtual terminal
-void update(Device *vt);
+void putsnoup(u8 *st);
 
 // Write a formatted string to the first virtual terminal without update the
 // virtual terminal
@@ -36,18 +33,5 @@ __attribute__ ((format (printf, 1, 2))) void kprintfnoup(const char* format, ...
 
 // Write a formatted string to the first virtual terminal
 __attribute__ ((format (printf, 1, 2))) void kprintf(const char* format, ...);
-
-// Write a string to the virtual terminal's stdout
-void    puts_vt(Device *vt, u8* str);
-// Write a character to the virtual terminal's stdout
-void    putc_vt(Device *vt, u8 key);
-// Write a character to the virtual terminal's stdin
-void    input_vt(Device *vt, u8 key);
-// Read a character from the virtual terminal's stdin FIFO
-u8      readc_vt(Device *vt);
-// Flush the virtual terminal, clearing all stored text data
-void    flush_vt(Device *vt);
-// Remove count characters from the bottom of the virtual terminal
-void    vt_shift(Device *vt, u32 count);
 
 #endif//GOSH_VT_H

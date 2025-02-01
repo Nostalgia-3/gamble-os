@@ -19,8 +19,10 @@ enum DeviceType {
     DEV_MICROPHONE,
     // A storage device that can be read and written to
     DEV_DRIVE,
+    
     // A virtual terminal, with stdio/stdout FIFOs
-    DEV_VIRT_TERM,
+    // DEV_VIRT_TERM,
+
     // A framebuffer for writing color data
     DEV_FRAMEBUFFER,
     // A driver

@@ -28,15 +28,16 @@ typedef struct {
 
 struct regs {
     int err;
-    unsigned int edi, esi, ebp, esp, ebx, edx, ecx, eax;  /* pushed by 'pusha' */
-    unsigned int eip, cs, eflags, useresp, ss;   /* pushed by the processor automatically */ 
+    unsigned int edi, esi, ebp, esp, ebx, edx, ecx, eax;
+    unsigned int eip, cs, eflags, useresp, ss;
 };
 
+// struct regs d
 __attribute__((noreturn)) void exception_handler(struct regs d);
 
 void idt_init(void);
 void idt_set_descriptor(u8 vector, void* isr, u8 flags);
 
-extern void test_func();
+extern void divbyzero();
 
 #endif

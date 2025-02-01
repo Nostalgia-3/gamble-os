@@ -3,6 +3,9 @@
 #include <types.h>
 #include <gosh/common.h>
 
+#define DRIVER_SUCCESS  0
+#define DRIVER_FAILED   1
+
 typedef enum _ConnType {
     CONN_PCI,
     CONN_USB
@@ -24,7 +27,7 @@ typedef struct _Driver {
     
     // Called when the driver is created (the system starts, in most cases).
     // The device passed is the driver psuedo-device
-    void (*DriverEntry)(Device *dev);
+    int (*DriverEntry)(Device *dev);
     // Called when a registered interrupt is called
     void (*DriverInt)(Device *dev, u8 int_id);
     // Called when a PCI/USB device is connected
@@ -33,8 +36,8 @@ typedef struct _Driver {
     void (*DriverEnd)();
 } Driver;
 
-// Load a driver into the system. Returns the ID
-u32 load_driver(Driver* driver);
+// Load a driver into the system, returning 0 if the driver loaded successfully, and any other number otherwise
+int load_driver(Driver* driver);
 
 // Unload a driver from the system
 void unload_driver(u32 id);

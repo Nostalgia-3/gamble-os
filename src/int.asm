@@ -6,22 +6,16 @@ extern irq_handler
 %macro isr_err_stub 1
 isr_stub_%+%1:
     pusha
-    mov eax, esp
-    push eax
-    push %1
+    push DWORD %1
     call exception_handler
     pop eax
-    pop gs
-    pop fs
-    pop es
-    pop ds
     popa
-    add esp, 8	                   ; Cleans up the pushed error code and pushed ISR number
     iret 
 %endmacro
 
 %macro isr_no_err_stub 1
 isr_stub_%+%1:
+    pusha
     push DWORD %1
     call exception_handler
     add esp, 4
@@ -110,19 +104,19 @@ irq_handle_table:
 %assign i 0
 %rep    16
     dd irq_handler_%+i
-%assign i i+1 
+%assign i i+1
 %endrep
 
 global isr_stub_table
 isr_stub_table:
-%assign i 0 
-%rep    32 
+%assign i 0
+%rep    32
     dd isr_stub_%+i
-%assign i i+1 
+%assign i i+1
 %endrep
 
-global test_func
-test_func:
+global divbyzero
+divbyzero:
     mov ebx, 0
     div ebx
     ret

@@ -67,20 +67,18 @@ const char* exception_messages[] =
 };
 
 #include <str.h>
-void exception_handler(struct regs d) {
-    puts_dbg("Exception \"");
-    puts_dbg(exception_messages[d.err]);
-    puts_dbg("\" called\n  eax = ");
-    puts_dbg(itoa(d.eax, 16));
-    puts_dbg(" ebx = ");
-    puts_dbg(itoa(d.ebx, 16));
-    puts_dbg(" ecx = ");
-    puts_dbg(itoa(d.ecx, 16));
-    puts_dbg(" edx = ");
-    puts_dbg(itoa(d.edx, 16));
-    puts_dbg("\n  eip = ");
-    puts_dbg(itoa(d.eip, 16));
-    putc_dbg('\n');
+void exception_handler(struct regs d) { // struct regs d
+    // int err;
+    // unsigned int edi, esi, ebp, esp, ebx, edx, ecx, eax;
+    // unsigned int eip, cs, eflags, useresp, ss;
+    kprintf(
+        "Exception \"%s\"\nEAX=%08X EBX=%08X ECX=%08X EDX=%08X\nESI=%08X EDI=%08X EBP=%08X ESP=%08X\nEIP=%08X EFL=%08X  CS=%08X  SS=%08X USP=%08X\n",
+        exception_messages[d.err],
+        d.eax, d.ebx, d.ecx, d.edx,
+        d.esi, d.edi, d.ebp, d.esp,
+        d.eip, d.eflags, d.cs, d.ss,
+        d.useresp
+    );
     
     __asm__ volatile (
         "cli":

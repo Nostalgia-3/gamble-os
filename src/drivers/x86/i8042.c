@@ -44,25 +44,69 @@ I8042_Status i8042_get_status() {
     return stat.st;
 }
 
-void i8042_set_config(I8042_Config config) {
+int i8042_send_byte(u8 byte) {
+    u16 timeout = 2400;
+    while((timeout--) > 0 && i8042_get_status().input_buff_state == 1) continue;
+    if(!timeout) {
+        return 1;
+    }
+    outb(0x60, byte);
+    return 0;
+}
+
+u8 i8042_get_byte() {
+    u16 timeout = 2400;
+    while((timeout--) > 0 && i8042_get_status().output_buff_state != 1) continue;
+    io_wait();
+    return inb(0x60);
+}
+
+int i8042_send_ack(u8 com) {
+    u8 resp;
+    i8042_send_byte(com);
+    u16 timeout = 2400;
+    do {
+        resp = inb(0x60);
+        timeout--;
+        if(resp == 0xFE) {
+            i8042_send_byte(com);
+        }
+    } while(timeout > 0 && resp != 0xFA);
+    if(!timeout) return 1;
+}
+
+int i8042_set_config(I8042_Config config) {
     union
     {
         u8 b;
         I8042_Config conf;
     } conf = { .conf = config };
 
-    u16 timeout = 800;
+    u16 timeout = 2400;
     while(timeout > 0 && i8042_get_status().input_buff_state == 1) timeout--;
+    if(!timeout) return 1;
     outb(0x64, COM_WRITE_CONFIG);
     i8042_send_byte(conf.b);
+    return 0;
 }
 
 I8042_Config i8042_get_config() {
-    u16 timeout = 800;
+    u16 timeout = 2400;
     while(timeout > 0 &&i8042_get_status().input_buff_state == 1) timeout--;
+    if(!timeout) {
+        I8042_Config conf;
+        conf._failed = 1;
+        return conf;
+    }
+
     outb(0x64, COM_READ_B0);
-    timeout = 800;
+    timeout = 2400;
     while(timeout > 0 && i8042_get_status().output_buff_state == 0) timeout--;
+    if(!timeout) {
+        I8042_Config conf;
+        conf._failed = 1;
+        return conf;
+    }
     u8 config = inb(0x60);
 
     union
@@ -74,38 +118,15 @@ I8042_Config i8042_get_config() {
     return conf.conf;
 }
 
-void i8042_send_cont_comm(u8 byte) {
-    u16 timeout = 800;
-    while(timeout > 0 && i8042_get_status().input_buff_state == 1) continue;
+int i8042_send_cont_comm(u8 byte) {
+    u16 timeout = 2400;
+    while((timeout-- > 0) && i8042_get_status().input_buff_state == 1) continue;
+    if(!timeout) {
+        return 1;
+    }
     outb(0x64, byte);
+    return 0;
 }
-
-void i8042_send_byte(u8 byte) {
-    u16 timeout = 800;
-    while(timeout > 0 && i8042_get_status().input_buff_state == 1) continue;
-    outb(0x60, byte);
-}
-
-u8 i8042_get_byte() {
-    u16 timeout = 800;
-    while(timeout > 0 && i8042_get_status().output_buff_state != 1) continue;
-    io_wait();
-    return inb(0x60);
-}
-
-void i8042_send_ack(u8 com) {
-    u8 resp;
-    i8042_send_byte(com);
-    u16 timeout = 800;
-    do {
-        resp = inb(0x60);
-        if(resp == 0xFE) {
-            i8042_send_byte(com);
-        }
-    } while(timeout > 0 && resp != 0xFA);
-}
-
-
 
 unsigned char enlower_scan1[128] = {
     0,   0,   '1', '2',  '3', '4', '5', '6', '7', '8', '9', '0',
@@ -138,19 +159,20 @@ void flush_buf() {
     };
 }
 
-void write_second(u8 byte) {
+int write_second(u8 byte) {
     outb(0x64, 0xD4);
     u16 timeout = 100;
     while(timeout != 0) {
         if(i8042_get_status().input_buff_state == 0) {
             outb(0x60, byte);
-            return;
+            return 0;
         }
         timeout--;
     }
+    if(!timeout) return 1;
 }
 
-void ack_second_ps2(u8 byte) {
+int ack_second_ps2(u8 byte) {
     write_second(byte);
 
     u8 resp     = 0x00;
@@ -163,13 +185,15 @@ void ack_second_ps2(u8 byte) {
         if(resp == 0xFA) break;
         timeout--;
     } while(resp != 0xFA && timeout != 0);
+
+    if(!timeout) return 1;
 }
 
 static u8 mouse_step = 0;
 static Device* mouse_dev;
 
 // @TODO handle device B
-void I8042_DriverEntry(Device *dev) {
+int I8042_DriverEntry(Device *dev) {
     Driver* driver = (Driver*)dev->data;
     driver->data = 0b00;
 
@@ -180,6 +204,7 @@ void I8042_DriverEntry(Device *dev) {
     // Flush output buffer
     flush_buf();
     I8042_Config conf = i8042_get_config(); // get controller config byte
+    if(conf._failed) return DRIVER_FAILED;
     conf.first_ps2_int  = 0;
     conf.first_ps2_trans= 1;
     conf.first_ps2_clock= 1;
@@ -190,12 +215,13 @@ void I8042_DriverEntry(Device *dev) {
     inb(0x60);
     i8042_send_cont_comm(COM_DISABLE_SECOND_PS2);
     conf = i8042_get_config();
+    if(conf._failed) return DRIVER_FAILED;
     conf.first_ps2_trans = 1;
     if(conf.second_ps2_clock) {
         dual = TRUE;
         conf.second_ps2_clock=1;
     }
-    i8042_set_config(conf);
+    if(i8042_set_config(conf));
 
     if(dual) {
         i8042_send_cont_comm(COM_ENABLE_SECOND_PS2);
@@ -209,7 +235,7 @@ port1_test:
     i8042_send_cont_comm(0xAB); // test port #1
     u8 resp = i8042_get_byte();
     if(resp != 0x00) {
-        kprintf("I8042 port #1 test failed\n");
+        kprintf("I8042 port #1 test failed (expected 0x00 but got 0x%02X)\n", resp);
         device_a = FALSE;
     }
 
@@ -217,7 +243,7 @@ dev1_test:
     i8042_send_ack(0xFF);
     resp = i8042_get_byte(); // port #1 self-test
     if(resp != 0xAA) {
-        kprintf("PS/2 port #1 test failed\n");
+        kprintf("PS/2 port #1 test failed (expected 0xFF but got 0x%02X)\n", resp);
         device_a = FALSE;
     }
 dev1_enable:
@@ -237,7 +263,7 @@ dev1_enable:
             // Failed to add a device
             if(kbd == NULL) {
                 kprintf("Failed to add the PS/2 keyboard to the gdevt\n");
-                return;
+                return DRIVER_FAILED;
             }
 
             k_register_int((Driver*)dev->data, 0x21);
@@ -246,6 +272,7 @@ dev1_enable:
             i8042_send_ack(0xF4); // enable scanning
             
             conf = i8042_get_config();
+            if(conf._failed) return DRIVER_FAILED;
             conf.first_ps2_int = 1; // enable interrupts
             i8042_set_config(conf);
         } else {
@@ -254,38 +281,38 @@ dev1_enable:
         }
     }
     
-dev2_test:
-    ack_second_ps2(0xFF);
-    resp = i8042_get_byte(); // port #2 self-test
-    if(resp != 0xAA) {
-        kprintf("PS/2 port #2 test failed\n");
-        device_b = FALSE;
-    }
-dev2_enable:
-    if(device_b) {
-        flush_buf();
-        ack_second_ps2(0xF2); // Identify the device
-        io_wait();
-        io_wait();
-        u16 device = i8042_get_byte();
-        // For some odd device is equal to 0xFA on some devices
-        if(device == 0xFA) device = i8042_get_byte();
+// dev2_test:
+//     ack_second_ps2(0xFF);
+//     resp = i8042_get_byte(); // port #2 self-test
+//     if(resp != 0xAA) {
+//         kprintf("PS/2 port #2 test failed\n");
+//         device_b = FALSE;
+//     }
+// dev2_enable:
+//     if(device_b) {
+//         flush_buf();
+//         ack_second_ps2(0xF2); // Identify the device
+//         io_wait();
+//         io_wait();
+//         u16 device = i8042_get_byte();
+//         // For some odd device is equal to 0xFA on some devices
+//         if(device == 0xFA) device = i8042_get_byte();
 
-        // for now we'll just support the "Standard PS/2 mouse"
-        if((device&0xFF) == 0x00) {
-            mouse_dev = k_add_dev(dev->id, DEV_MOUSE, device);
+//         // for now we'll just support the "Standard PS/2 mouse"
+//         if((device&0xFF) == 0x00) {
+//             mouse_dev = k_add_dev(dev->id, DEV_MOUSE, device);
 
-            // Failed to add a device
-            if(mouse_dev == NULL) {
-                kprintf("Failed to add the PS/2 mouse to the gdevt\n");
-                device_b = FALSE;
-            }
-        } else {
-            kprintf("Unknown PS/2 Device in port #2: 0x%X\n", device);
-        }
-    }
+//             // Failed to add a device
+//             if(mouse_dev == NULL) {
+//                 kprintf("Failed to add the PS/2 mouse to the gdevt\n");
+//                 device_b = FALSE;
+//             }
+//         } else {
+//             kprintf("Unknown PS/2 Device in port #2: 0x%X\n", device);
+//         }
+//     }
 
-    conf = i8042_get_config();
+//     conf = i8042_get_config();
 
 dev1_start:
     if(device_a) {
@@ -297,21 +324,22 @@ dev1_start:
         conf.first_ps2_trans = 1;
     }
 
-dev2_start:
-    if(device_b) {
-        k_register_int((Driver*)dev->data, 0x2C);
-        driver->data = (u32*)((u32)driver->data | KBD_LOADED);
+// dev2_start:
+//     if(device_b) {
+//         k_register_int((Driver*)dev->data, 0x2C);
+//         driver->data = (u32*)((u32)driver->data | KBD_LOADED);
         
-        ack_second_ps2(0xF4); // enable scanning
+//         ack_second_ps2(0xF4); // enable scanning
 
-        conf.second_ps2_clock = 1; // enable interrupts
-    }
+//         conf.second_ps2_clock = 1; // enable interrupts
+//     }
 
     i8042_set_config(conf);
+    return DRIVER_SUCCESS;
 }
 
 void reset_cpu() {
-    u16 timeout = 800;
+    u16 timeout = 2400;
     while(timeout > 0 && i8042_get_status().input_buff_state == 1) timeout--;
     outb(0x64, COM_RESET_CPU); // reset the cpu
 }
@@ -322,10 +350,6 @@ void I8042_DriverInt(Device *dev, u8 int_id) {
 
     if(int_id == 0x21) { // KBD
         u8 scan = inb(0x60);
-        // kprintf("Key Pressed %X\n",scan);
-        // puts_dbg("0x");
-        // puts_dbg(itoa(scan, 16));
-        // putc_dbg(' ');
 
         if(x & KBD_IGNORE) {
             if(scan == 0x53) { // Delete key

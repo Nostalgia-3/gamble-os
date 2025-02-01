@@ -5,7 +5,7 @@
 #include <gosh/gosh.h>
 
 PCIDriver get_ac97_driver();
-void AC97_DriverEntry(Device *dev);
+int AC97_DriverEntry(Device *dev);
 void AC97_DriverInt(Device *dev, u8 intr);
 
 #endif

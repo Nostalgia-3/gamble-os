@@ -304,7 +304,7 @@ void ATAPIO_write_sector(Device *dev, u32 sector, u8 *addr) {
 
 #include <str.h>
 #include <memory.h>
-void ATA_DriverEntry(Device *d) {
+int ATA_DriverEntry(Device *d) {
     if(inb(IO_BASE1 + IO_STATUS_REG) == 0xFF) {
         kprintf("Warning: IO bus #1 has no drives\n");
     } else {
@@ -313,9 +313,9 @@ void ATA_DriverEntry(Device *d) {
         if(d1.exists && d1.size > 0) {
             // create a drive device
             Device *dev = k_add_dev(d->id, DEV_DRIVE, 0x00);
-            if(dev == NULL) return;
+            if(dev == NULL) return DRIVER_FAILED;
             DriveDeviceData *data = dev->data;
-            if(data == NULL) return;
+            if(data == NULL) return DRIVER_FAILED;
             data->read_sector = ATAPIO_read_sector;
             data->write_sector = ATAPIO_write_sector;
             data->sectors = d1.size/512;
@@ -325,9 +325,9 @@ void ATA_DriverEntry(Device *d) {
         if(d2.exists && d2.size > 0) {
             // create a drive device
             Device *dev = k_add_dev(d->id, DEV_DRIVE, 0x01);
-            if(dev == NULL) return;
+            if(dev == NULL) return DRIVER_FAILED;
             DriveDeviceData *data = dev->data;
-            if(data == NULL) return;
+            if(data == NULL) return DRIVER_FAILED;
             data->read_sector = ATAPIO_read_sector;
             data->write_sector = ATAPIO_write_sector;
             data->sectors = d2.size/512;
@@ -346,9 +346,9 @@ void ATA_DriverEntry(Device *d) {
         if(d3.exists && d3.size > 0) {
             // create a drive device
             Device *dev = k_add_dev(d->id, DEV_DRIVE, 0x02);
-            if(dev == NULL) return;
+            if(dev == NULL) return DRIVER_FAILED;
             DriveDeviceData *data = dev->data;
-            if(data == NULL) return;
+            if(data == NULL) return DRIVER_FAILED;
             data->read_sector = ATAPIO_read_sector;
             data->write_sector = ATAPIO_write_sector;
             data->sectors = d3.size/512;
@@ -358,9 +358,9 @@ void ATA_DriverEntry(Device *d) {
         if(d4.exists && d4.size > 0) {
             // create a drive device
             Device *dev = k_add_dev(d->id, DEV_DRIVE, 0x03);
-            if(dev == NULL) return;
+            if(dev == NULL) return DRIVER_FAILED;
             DriveDeviceData *data = dev->data;
-            if(data == NULL) return;
+            if(data == NULL) return DRIVER_FAILED;
             data->read_sector = ATAPIO_read_sector;
             data->write_sector = ATAPIO_write_sector;
             data->sectors = d4.size/512;
@@ -369,6 +369,8 @@ void ATA_DriverEntry(Device *d) {
 
         k_register_int((Driver*)d->data, IRQ_SECOND_BUS);
     }
+
+    return DRIVER_SUCCESS;
 }
 
 void ATA_DriverInt(Device *dev, u8 int_id) {

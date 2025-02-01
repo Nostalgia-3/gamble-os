@@ -29,34 +29,24 @@ void syscall_handler() {
 
 void _start() {
     *(u8*)0xB8000 = '!';
-    puts_dbg("Primary initialization...\n");
 
-    puts_dbg("  Initializing IDT...\t\t\t");
     idt_init();
-    puts_dbg("\x1b[32mOK\x1b[0m\n");
+    puts_dbg("Initialized IDT\n");
 
-    puts_dbg("  Initializing memory...\t\t");
     init_mem();
-    // TODO: seriously figure out why this is needed for it not to crash on some hardware
-    // k_malloc(sizeof(Device));
-    puts_dbg("\x1b[32mOK\x1b[0m\n");
+    kprintf("Initialized memory\n");
 
-    puts_dbg("  Initializing GDevTable...\t\t");
     int gde = _init_gdevt();
     if(gde || get_gdevt() == NULL) {
-        puts_dbg("\x1b[31mFAILED(");
-        puts_dbg(itoa(gde, 10));
-        puts_dbg(")\x1b[0m\n");
+        kprintf("Failed initializing gdevt with error #%u\n", gde);
         kpanic();
     } else {
-        puts_dbg("\x1b[32mOK\x1b[0m\n");
+        kprintf("Initialized gdevt\n");
     }
 
-    puts_dbg("  Initializing PCI...\t\t\t");
     initialize_pci();
-    puts_dbg("\x1b[32mOK\x1b[0m\n");
+    puts_dbg("Initialized PCI\n");
 
-    puts_dbg("  Loading drivers...\n");
     // Harcode some drivers for testing
     Driver DriverVGA        = { .name = "VGA.DRV",      .DriverEntry = VGA_DriverEntry, .data = (void*)(u32)0 };
     Driver DriverI8042      = { .name = "I8042.DRV",    .DriverEntry = I8042_DriverEntry, .DriverInt = I8042_DriverInt };
@@ -73,50 +63,29 @@ void _start() {
     PCI_ADD(&ac97);
     PCI_ADD(&i8254);
 
-    puts_dbg("    VGA driver...\t\t\t");
     load_driver(&DriverVGA);
-    puts_dbg("\x1b[32mOK\x1b[0m\n");
-    
-    puts_dbg("    I8042 driver...\t\t\t");
     load_driver(&DriverI8042);
-    puts_dbg("\x1b[32mOK\x1b[0m\n");
-
-    puts_dbg("    ATA PIO driver...\t\t\t");
     load_driver(&DriverATA_PIO);
-    puts_dbg("\x1b[32mOK\x1b[0m\n");
-
-    puts_dbg("    PCI driver...\t\t\t");
-    load_driver(&DriverPCI);
-    puts_dbg("\x1b[32mOK\x1b[0m\n");
-
-    puts_dbg("  Loading drivers... \x1b[32mOK\x1b[0m\n");
-
-    puts_dbg("Primary initialization... \x1b[32mOK\x1b[0m\n");
+    load_driver(&DriverPCI); // This is a wrapper that automatically loads registered PCI drivers
 
     Device *fb = fb_get(RESOLUTION);
     if(fb == NULL) {
-        puts_dbg("No available framebuffers...\n");
+        kprintf("No available framebuffers...\n");
     } else if(fb->data == NULL) {
-        puts_dbg("Framebuffer data is NULL!\n");
-    }
-
-    Device *vt = k_get_device_by_type(DEV_VIRT_TERM);
-    if(vt == NULL || vt->data == NULL) {
-        puts_dbg("No virtual terminal!\n");
-        kpanic();
+        kprintf("Framebuffer data is NULL!\n");
     }
 
     if(!((u32)DriverI8042.data & 0b10000000)) {
-        puts_dbg("Failed to initialize PS/2 keyboard and mouse :(\n");
-        while(1);
+        kprintf("Failed to initialize PS/2 keyboard and mouse :(\n");
     }
 
+    divbyzero();
     // end_dbg();
 
     kprintf("GaOS v0.1 (built with gcc v" __VERSION__ ")\n");
 
-    // if(shell_main(0))
-    //     kpanic();
+    if(shell_main(0))
+        kpanic();
 
     while(1);
 }

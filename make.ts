@@ -122,11 +122,13 @@ function build(pargs: Record<string, unknown>) {
 
     const assemblyFiles: string[] = m.scanDir('src/', /\.asm$/, /^s\_/).sort((a,b)=>a.charCodeAt(0)-b.charCodeAt(0));
     const cFiles: string[] = m.scanDir('src/', /\.c$/);
+    const objs: string[] = [];
     
     m.call(`${pargs.nasm} src/boot/s_main.asm -fbin -o ${MBR}`);
     m.call(`${pargs.nasm} src/boot/s_second.asm -fbin -o ${SECOND_STAGE}`);
     
     for(const asm of assemblyFiles) {
+        objs.push(`build/${m.ext(m.base(asm), '.asm.o')}`);
         if(
             !existsSync(`build/${m.ext(m.base(asm), '.asm.o')}`) || 
             (Deno.statSync(`build/${m.ext(m.base(asm), '.asm.o')}`).mtime?.getTime() ?? 0) < (Deno.statSync(asm).mtime?.getTime() ?? 0))
@@ -134,21 +136,22 @@ function build(pargs: Record<string, unknown>) {
     }
     
     for(const c of cFiles) {
+        objs.push(`build/${m.ext(m.base(c), '.c.o')}`);
         if(
             !existsSync(`build/${m.ext(m.base(c), '.c.o')}`) ||
             (Deno.statSync(`build/${m.ext(m.base(c), '.c.o')}`).mtime?.getTime() ?? 0) < (Deno.statSync(c).mtime?.getTime() ?? 0))
         m.call(`${pargs.gcc} -I ${INCLUDE} -O2 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
     }
 
-    const objs: string[] = [];
+    // const objs: string[] = [];
 
-    for(const file of assemblyFiles.map((v)=>path.join('build/', m.ext(m.base(v), '.asm.o')))) {
-        objs.push(file);
-    }
+    // for(const file of assemblyFiles.map((v)=>path.join('build/', m.ext(m.base(v), '.asm.o')))) {
+    //     objs.push(file);
+    // }
 
-    for(const file of cFiles.map((v)=>path.join('build/', m.ext(m.base(v), '.c.o')))) {
-        objs.push(file);
-    }
+    // for(const file of cFiles.map((v)=>path.join('build/', m.ext(m.base(v), '.c.o')))) {
+    //     objs.push(file);
+    // }
 
     m.call(`${pargs.gcc} -T ${LINKER_SCRIPT} -o ${KERNEL} -ffreestanding -O2 -nostdlib -m32 ${objs.join(' ')}`);
     

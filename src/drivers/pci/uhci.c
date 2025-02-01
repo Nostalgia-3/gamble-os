@@ -47,7 +47,7 @@ PCIDriver get_uhci_driver() {
     };
 }
 
-void UCHIDriverEntry(Device *dev) {
+int UCHIDriverEntry(Device *dev) {
     Driver* driver = (Driver*)dev->data;
     u32 d = (u32)driver->data;
 
@@ -55,6 +55,7 @@ void UCHIDriverEntry(Device *dev) {
     u8 slot = (d >> 8) & 0xFF;
 
     kprintf("UCHI detected (pci bus = %u, pci slot = %u)\n", bus, slot);
+    return DRIVER_SUCCESS;
 }
 
 void UCHIDriverInt(Device *dev, u8 intr) {
