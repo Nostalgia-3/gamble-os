@@ -34,17 +34,6 @@ typedef struct _I8042_Config {
     u8 _failed              : 1;
 } I8042_Config;
 
-
-// I8042_Status    i8042_get_status();
-
-// void            i8042_set_config(I8042_Config config);
-// I8042_Config    i8042_get_config();
-
-// void            i8042_send_cont_comm(u8 byte);
-
-// void            i8042_send_byte(u8 byte);
-// u8              i8042_get_byte();
-
 int I8042_DriverEntry(Device *dev);
 void I8042_DriverInt(Device *dev, u8 int_id);
 

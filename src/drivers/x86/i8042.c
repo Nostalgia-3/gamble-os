@@ -55,10 +55,13 @@ int i8042_send_byte(u8 byte) {
 }
 
 u8 i8042_get_byte() {
-    u16 timeout = 2400;
-    while((timeout--) > 0 && i8042_get_status().output_buff_state != 1) continue;
-    io_wait();
-    return inb(0x60);
+    u16 timeout = 3500;
+    while(timeout > 0 && i8042_get_status().output_buff_state != 1) timeout--;
+    if(timeout == 0) {
+        return 0;
+    }
+    u8 d = inb(0x60);
+    return d;
 }
 
 int i8042_send_ack(u8 com) {
@@ -153,8 +156,8 @@ unsigned char enshift_scan1[128] = {
 #define KBD_SHIFT       0b00000100
 #define KBD_LOADED      0b10000000
 
-void flush_buf() {
-    while(i8042_get_status().output_buff_state != 0) {
+void flush_i8042_buf() {
+    while(i8042_get_status().output_buff_state == 1) {
         i8042_get_byte();
     };
 }
@@ -202,7 +205,7 @@ int I8042_DriverEntry(Device *dev) {
     bool device_b = TRUE;
 
     // Flush output buffer
-    flush_buf();
+    flush_i8042_buf();
     I8042_Config conf = i8042_get_config(); // get controller config byte
     if(conf._failed) return DRIVER_FAILED;
     conf.first_ps2_int  = 0;
@@ -228,10 +231,8 @@ int I8042_DriverEntry(Device *dev) {
     }
 
     // Disable ports
-    i8042_send_ack(0xF5); // Disable scanning for port #1...
-    if(dual) ack_second_ps2(0xF5); // and port #2
+    i8042_send_ack(0xF5);   // Disable scanning for port #1
 
-port1_test:
     i8042_send_cont_comm(0xAB); // test port #1
     u8 resp = i8042_get_byte();
     if(resp != 0x00) {
@@ -239,21 +240,25 @@ port1_test:
         device_a = FALSE;
     }
 
-dev1_test:
+    flush_i8042_buf();
     i8042_send_ack(0xFF);
     resp = i8042_get_byte(); // port #1 self-test
-    if(resp != 0xAA) {
-        kprintf("PS/2 port #1 test failed (expected 0xFF but got 0x%02X)\n", resp);
+    if(resp == 0x00) resp = i8042_get_byte();
+    // not all PS/2 devices send in order (0xAA, 0xFA or 0xFA, 0xAA are both possible)
+    if(resp != 0xAA && resp != 0xFA) {
+        kprintf("Port #1 test failed (expected 0xAA or 0xFA but got 0x%02X)\n", resp);
         device_a = FALSE;
     }
-dev1_enable:
+    flush_i8042_buf();
+
     if(device_a) {
-        flush_buf();
+        flush_i8042_buf();
         i8042_send_ack(0xF2); // Identify the device
-        io_wait();
-        io_wait();
         u16 device = i8042_get_byte();
-        if(device == 0xFA) device = i8042_get_byte();
+        while(device == 0xFA) {
+            device = i8042_get_byte();
+            kprintf("%X \n", device);
+        }
         io_wait();
         io_wait();
 
@@ -277,44 +282,10 @@ dev1_enable:
             i8042_set_config(conf);
         } else {
             kprintf("Unknown PS/2 Device: 0x%X\n", device);
-            device_a = FALSE;
+            // device_a = FALSE;
         }
     }
     
-// dev2_test:
-//     ack_second_ps2(0xFF);
-//     resp = i8042_get_byte(); // port #2 self-test
-//     if(resp != 0xAA) {
-//         kprintf("PS/2 port #2 test failed\n");
-//         device_b = FALSE;
-//     }
-// dev2_enable:
-//     if(device_b) {
-//         flush_buf();
-//         ack_second_ps2(0xF2); // Identify the device
-//         io_wait();
-//         io_wait();
-//         u16 device = i8042_get_byte();
-//         // For some odd device is equal to 0xFA on some devices
-//         if(device == 0xFA) device = i8042_get_byte();
-
-//         // for now we'll just support the "Standard PS/2 mouse"
-//         if((device&0xFF) == 0x00) {
-//             mouse_dev = k_add_dev(dev->id, DEV_MOUSE, device);
-
-//             // Failed to add a device
-//             if(mouse_dev == NULL) {
-//                 kprintf("Failed to add the PS/2 mouse to the gdevt\n");
-//                 device_b = FALSE;
-//             }
-//         } else {
-//             kprintf("Unknown PS/2 Device in port #2: 0x%X\n", device);
-//         }
-//     }
-
-//     conf = i8042_get_config();
-
-dev1_start:
     if(device_a) {
         k_register_int((Driver*)dev->data, 0x21);
         driver->data = (u32*)((u32)driver->data | KBD_LOADED);
@@ -324,17 +295,8 @@ dev1_start:
         conf.first_ps2_trans = 1;
     }
 
-// dev2_start:
-//     if(device_b) {
-//         k_register_int((Driver*)dev->data, 0x2C);
-//         driver->data = (u32*)((u32)driver->data | KBD_LOADED);
-        
-//         ack_second_ps2(0xF4); // enable scanning
-
-//         conf.second_ps2_clock = 1; // enable interrupts
-//     }
-
     i8042_set_config(conf);
+    flush_i8042_buf();
     return DRIVER_SUCCESS;
 }
 

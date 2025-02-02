@@ -13,29 +13,23 @@ const date = Date.now().toString();
 
 const MBR               = 'build/mbr.bin';      // The first 512 bytes of the bootloader
 const SECOND_STAGE      = 'build/second.bin';   // The next 2KiB of the bootloader
-const KERNEL            = 'build/kernel.bin';   // A file that's supposed to be loaded by the bootloader (not yet, though)
+const KERNEL            = 'build/kernel.elf';   // A file that's supposed to be loaded by the bootloader (not yet, though)
 const LINKER_SCRIPT     = 'linker.ld';
 
 const MAX_KERNEL_SIZE   = 1024*512;             // This is accurate enough
 const FILE_SIZE         = 1024;                 // Size of the output .img file in 512-byte sectors (512KiB)
+
+const CFLAGS            = `-O2 -m32 -fno-pie -nostdlib -ffreestanding`;
 
 const INCLUDE           = 'include';
 
 yargs(Deno.args)
     .strictCommands()
     .demandCommand()
-    .command('run', 'Build then run the operating system binary', (yargs) => {
-        return yargs.option('outsize', {
-            alias: 's',
-            type: 'number',
-            description: 'The size of the output image file',
-            default: 512*1024
-        });
-    }, (args) => { build(args) })
+    .command('run', 'Build then emulate the operating system binary', () => {}, (args) => { build(args); emulate(args); })
     .command('emulate', 'Emulate the first image binary found in build/', () => {}, (args) => { emulate(args) })
-    .command('listen', 'Start an external server', () => {}, () => {
-        m.startExServer();
-    })
+    .command('listen', 'Start an external server', () => {}, () => { m.startExServer(); })
+    .command('compile', `Compile the operating system to a binary`, ()=>{}, (args)=>{ console.log(`Kernel built to ${build(args)}`); })
     .option('output', {
         alias: 'o',
         type: 'string',
@@ -80,24 +74,37 @@ function emulate(pargs: Record<string, unknown>) {
         m.call(`qemu-img create disk.img 512M`);
     }
 
+    if(!existsSync('nvm.img')) {
+        m.call(`qemu-img create nvm.img 8G`);
+        m.call(`dd conv=notrunc if=${output} of=nvm.img`);
+    }
+
     const qemu = [
         // Primary drive
         `-drive file=${output},format=raw,media=disk,index=0`,
+        
         // Secondary drive
         `-drive if=none,file=./disk.img,format=raw,id=stick`,
+        
+        // NVMe drive
+        `-drive file=nvm.img,if=none,id=nvm`,
+        `-device nvme,serial=test,drive=nvm`, // serial=nvmedrive,
+
         // AC97 audio card
         `-audio driver=sdl,model=ac97,id=speaker`,
         // PC Speaker
         `-machine pcspk-audiodev=speaker`,
+
         // E1000 network card
         `-net nic,model=e1000,macaddr=00:11:22:33:44:55`,
         `-net user`,
-        // USB 2.0
+
+        // USB stick
         '-device usb-ehci,id=ehci',
-        // USB storage device
         '-device usb-storage,bus=ehci.0,drive=stick',
+
         // RAM
-        `-m 512M`,
+        `-m 1G`
     ];
 
     if(pargs.exip == undefined) {
@@ -131,29 +138,19 @@ function build(pargs: Record<string, unknown>) {
         objs.push(`build/${m.ext(m.base(asm), '.asm.o')}`);
         if(
             !existsSync(`build/${m.ext(m.base(asm), '.asm.o')}`) || 
-            (Deno.statSync(`build/${m.ext(m.base(asm), '.asm.o')}`).mtime?.getTime() ?? 0) < (Deno.statSync(asm).mtime?.getTime() ?? 0))
-        m.call(`${pargs.nasm} ${asm} -felf32 -o build/${m.ext(m.base(asm), '.asm.o')}`);
+            (Deno.statSync(`build/${m.ext(m.base(asm), '.asm.o')}`).mtime?.getTime() ?? 0) < (Deno.statSync(asm).mtime?.getTime() ?? 0)
+        ) m.call(`${pargs.nasm} ${asm} -felf32 -o build/${m.ext(m.base(asm), '.asm.o')}`);
     }
     
     for(const c of cFiles) {
         objs.push(`build/${m.ext(m.base(c), '.c.o')}`);
         if(
             !existsSync(`build/${m.ext(m.base(c), '.c.o')}`) ||
-            (Deno.statSync(`build/${m.ext(m.base(c), '.c.o')}`).mtime?.getTime() ?? 0) < (Deno.statSync(c).mtime?.getTime() ?? 0))
-        m.call(`${pargs.gcc} -I ${INCLUDE} -O2 -m32 -o build/${m.ext(m.base(c), '.c.o')} -fno-pie -ffreestanding -c ${c}`);
+            (Deno.statSync(`build/${m.ext(m.base(c), '.c.o')}`).mtime?.getTime() ?? 0) < (Deno.statSync(c).mtime?.getTime() ?? 0)
+        ) m.call(`${pargs.gcc} -I ${INCLUDE} ${CFLAGS} -c -o build/${m.ext(m.base(c), '.c.o')} ${c}`);
     }
 
-    // const objs: string[] = [];
-
-    // for(const file of assemblyFiles.map((v)=>path.join('build/', m.ext(m.base(v), '.asm.o')))) {
-    //     objs.push(file);
-    // }
-
-    // for(const file of cFiles.map((v)=>path.join('build/', m.ext(m.base(v), '.c.o')))) {
-    //     objs.push(file);
-    // }
-
-    m.call(`${pargs.gcc} -T ${LINKER_SCRIPT} -o ${KERNEL} -ffreestanding -O2 -nostdlib -m32 ${objs.join(' ')}`);
+    m.call(`${pargs.gcc} ${CFLAGS} -T ${LINKER_SCRIPT} -o ${KERNEL} ${objs.join(' ')}`);
     
     const fMBR = Deno.readFileSync(MBR);
     const fKERNEL = Deno.readFileSync(KERNEL);
@@ -174,9 +171,9 @@ function build(pargs: Record<string, unknown>) {
     if(!existsSync('build/iso/sys')) Deno.mkdirSync('build/iso/sys');
     if(!existsSync('build/iso/boot/grub')) Deno.mkdirSync('build/iso/boot/grub', { recursive: true });
     Deno.copyFileSync('grub.cfg', 'build/iso/boot/grub/grub.cfg');
-    Deno.copyFileSync(KERNEL, 'build/iso/sys/kernel.bin');
+    Deno.copyFileSync(KERNEL, 'build/iso/sys/kernel.elf');
 
     m.call(`grub-mkrescue -o ${outFile} build/iso`);
 
-    emulate(pargs);
+    return outFile;
 }

@@ -4,6 +4,7 @@
 // Write a buffer to a system port (similar to a file descriptor in linux)
 void write(u32 port, void *buf, size_t len) {
     if(port == STDOUT) {
+        // For now, this will be fine
         vga_write(buf, len);
     } else if(port == STDIN) {
         write(STDOUT, (void*)buf, len);

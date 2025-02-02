@@ -117,8 +117,8 @@ void vga_set_cursor(u16 x, u16 y) {
 
 void vga_scroll_down() {    
     u32 line_width = (80*2);
-    for(u32 i=1;i<25;i++) {
-        memcpy((u8*)0xB8000+line_width*(i-1), (u8*)0xB8000+160*i, 160);
+    for(u32 i=0;i<25;i++) {
+        memcpy((u8*)0xB8000+line_width*i, (u8*)0xB8000+160*i, 160);
     }
     memset((u8*)0xB8000+line_width*(25-1), 0, 160);
 
@@ -144,35 +144,76 @@ void vga_write(char *st, size_t len) {
             if(is_letter(st[i])) {
                 in_ansi = FALSE;
 
-                // I *really* hate doing stuff in C
-                if(ansi_buf[0] != '[') {
-                    // not good :(
-                } else if(ansi_buf[2] == 'm' && is_digit(ansi_buf[1])) {
-                    switch(ansi_buf[1]-'0') {
-                        case 0: attributes = ansi_to_text[sizeof(ansi_to_text)-1]; break;
-                        case 5: attributes |= (1<<7); break;
-                    }
-                } else if(
-                    ansi_buf[3] == 'm' &&
-                    is_digit(ansi_buf[1]) &&
-                    is_digit(ansi_buf[2])
-                ) {
-                    u8 com = (ansi_buf[1] - '0');
-                    u8 dat = (ansi_buf[2] - '0');
-                    u16 n = ((ansi_buf[1] - '0') * 10) + (ansi_buf[2] - '0');
-                    if(com == 3)        attributes = (attributes & 0xF0) | ansi_to_text[dat];
-                    else if(com == 4)   attributes = (attributes & 0x7F) | (ansi_to_text[dat]<<4);
-                    else if(com == 9)   attributes = (attributes & 0xF0) | bansi_to_text[dat];
-                } else if(ansi_buf[2] == 'J') {
-                    if(ansi_buf[1] == '2') {
-                        for(int x=0;x<80*25;x++) {
-                            *(u8*)(0xB8000+x*2) = '\0';
-                            *(u8*)(0xB8000+x*2+1) = attributes;
+                if(ansi_buf[0] != '[') goto finish_ansi;
+
+                char comm = st[i];
+
+                switch(comm) {
+                    case 'm': { // num[\;num]:*m
+                        char* d = strtok(ansi_buf+1, 'm');
+
+                        u32 code = atoi(d);
+
+                        if(code == 0) attributes = 7;
+                        else if(code == 5)      attributes |= 0x80;
+                        else if((code)/10 == 3) attributes = (attributes & 0xF0) | ansi_to_text[code%10];
+                        else if((code)/10 == 4) attributes = (attributes & 0x7F) | (ansi_to_text[code%10]<<4);
+                        else if((code)/10 == 9) attributes = (attributes & 0xF0) | bansi_to_text[code%10];
+                    break; }
+
+                    case 'J': {
+                        char* d = strtok(ansi_buf+1, 'J');
+                        u32 code = atoi(d);
+
+                        if(code == 0) {
+                            for(int x=0;x<(80*25 - screen_cursor);x++) {
+                                *(u8*)(0xB8000+x*2) = '\0';
+                                *(u8*)(0xB8000+x*2+1) = attributes;
+                            }
+                        } else if(code == 1) {
+                            for(int x=0;x<screen_cursor;x++) {
+                                *(u8*)(0xB8000+x*2) = '\0';
+                                *(u8*)(0xB8000+x*2+1) = attributes;
+                            }
+                        } else if(code == 2) {
+                            for(int x=0;x<80*25;x++) {
+                                *(u8*)(0xB8000+x*2) = '\0';
+                                *(u8*)(0xB8000+x*2+1) = attributes;
+                            }
+                            screen_cursor = 0;
                         }
+                    break; }
+
+                    case 'K': {
+                        char* d = strtok(ansi_buf+1, 'K');
+                        u32 code = atoi(d);
+
+                        u32 line = (screen_cursor-screen_cursor%80)*2;
+
+                        if(code == 0) {
+                            for(int x=screen_cursor%80;x<80;x++) {
+                                *(u8*)(0xB8000+line+x*2) = '\0';
+                                *(u8*)(0xB8000+line+x*2+1) = attributes;
+                            }
+                        } else if(code == 1) {
+                            for(int x=0;x<screen_cursor%80;x++) {
+                                *(u8*)(0xB8000+line+x*2) = '\0';
+                                *(u8*)(0xB8000+line+x*2+1) = attributes;
+                            }
+                        } else if(code == 2) {
+                            for(int x=0;x<80;x++) {
+                                *(u8*)(0xB8000+line+x*2) = '\0';
+                                *(u8*)(0xB8000+line+x*2+1) = attributes;
+                            }
+                        }
+                    break; }
+
+                    case 'H':
                         screen_cursor = 0;
-                    }
+                    break;
                 }
 
+            finish_ansi:
                 memset(ansi_buf, 0, ansi_index);
                 ansi_index = 0;
             }
@@ -187,7 +228,10 @@ void vga_write(char *st, size_t len) {
                 screen_cursor--;
                 *(u8*)(0xB8000+screen_cursor*2) = '\0';
                 *(u8*)(0xB8000+screen_cursor*2+1) = attributes;
-            } else if(st[i] != '\r') {
+            } else if(st[i] == '\r') {
+                // Go to the beginning of the line
+                screen_cursor = screen_cursor - (screen_cursor % 80);
+            } else {
                 *(u8*)(0xB8000+screen_cursor*2) = st[i];
                 *(u8*)(0xB8000+screen_cursor*2+1) = attributes;
                 if(screen_cursor > 80*25) vga_scroll_down();

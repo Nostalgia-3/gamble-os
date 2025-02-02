@@ -10,8 +10,13 @@ _load:
     ; mov esp, stack_top      ; setup stack
     ; mov ebp, esp
 
-    mov ah, '?'
+    push eax
+    push ebx
+
+    mov ah, 'K'
     mov [0xB8000], ah
+    mov ah, 'e'
+    mov [0xB8002], ah
     
     lgdt [gdt_descriptor]   ; setup the GDT
     jmp CODE_SEG:.start

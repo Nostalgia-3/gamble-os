@@ -353,8 +353,6 @@ int I8254_DriverEntry(Device *dev) {
         }
     }
 
-    kprintf("mem = %X, io = %X\n", mem_base, io_base);
-
     detect_eeprom();
     if(!read_mac_addr()) {
         kprintf("Fatal(i8254): Unable to read mac address\n");

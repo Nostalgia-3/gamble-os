@@ -307,12 +307,12 @@ void run_command(u32 mem) {
 }
 
 int shell_main(u32 mem) {
-    const char* prompt = "\x1b[94mShell\x1b[97m>";
+    const char* prompt = "\x1b[94mShell\x1b[0m> ";
 
     clear_screen();
 
     kprintf("-= \x1b[93mGaOs \x1b[94mShell\x1b[0m v1.0 =-\n");
-    kprintf("%s\x1b[97m ", prompt);
+    kprintf("%s\x1b[0m", prompt);
 
     bool extra = FALSE;
 
@@ -346,11 +346,12 @@ int shell_main(u32 mem) {
                 for(int x=0;x<ind;x++) cmdbfr[x] = 0;
                 ind = 0;
 
-                if(running) kprintf("%s ", prompt);
+                if(running) kprintf("%s", prompt);
             } else {
                 if(ind > sizeof(cmdbfr)) continue;
-                putc(sc);
                 cmdbfr[ind++] = sc;
+                // colorize the command
+                kprintf("\x1b[2K\r%s%s", prompt, cmdbfr);
             }
         }
 
