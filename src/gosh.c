@@ -1133,7 +1133,8 @@ void v_kprintf(const char *format, va_list list) {
                     
                 case 's':
                 {
-                    putsnoup(va_arg(list, char*));
+                    char *st = va_arg(list, char*);
+                    write(STDOUT, st, strlen(st));
                     break;
                 }
                     

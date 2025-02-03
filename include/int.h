@@ -38,6 +38,7 @@ __attribute__((noreturn)) void exception_handler(struct regs d);
 void idt_init(void);
 void idt_set_descriptor(u8 vector, void* isr, u8 flags);
 
+// cause a divide by zero exception
 extern void divbyzero();
 
 #endif

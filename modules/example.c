@@ -1,10 +1,22 @@
 #include <stdint.h>
 #include "module.h"
 
-static module *mod;
+ssize_t custom_read(char *buf, size_t count, loff_t *offp) {
+    return 0;
+}
 
-int _module_init(module *m) {
+static module *mod;
+static pipe_entry *entry;
+
+static pipe_config conf = {
+    .read = custom_read
+};
+
+int _module_start(module *m) {
     mod = m;
+
+    entry = pipe_create("hello", &conf);
+
     return 0;
 }
 

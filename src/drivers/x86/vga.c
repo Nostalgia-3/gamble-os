@@ -5,6 +5,7 @@
 #include "drivers/x86/vga.h"
 
 // black, red, green, yellow, blue, magenta, cyan, white, reset
+
 static u8   ansi_to_text[]  = { 0x0, 0x4, 0x2, 0x6, 0x1, 0x5, 0x3, 0x7 };
 static u8   bansi_to_text[] = { 0x8, 0xC, 0xA, 0xE, 0x9, 0xD, 0xB, 0xF };
 static u16  screen_cursor   = 0;
@@ -118,9 +119,9 @@ void vga_set_cursor(u16 x, u16 y) {
 void vga_scroll_down() {    
     u32 line_width = (80*2);
     for(u32 i=0;i<25;i++) {
-        memcpy((u8*)0xB8000+line_width*i, (u8*)0xB8000+160*i, 160);
+        memcpy((u8*)0xB8000+line_width*i, (u8*)0xB8000+line_width*(i+1), line_width);
     }
-    memset((u8*)0xB8000+line_width*(25-1), 0, 160);
+    memset((u8*)0xB8000+line_width*(25), 0, line_width);
 
     screen_cursor-=80;
 }
@@ -234,7 +235,7 @@ void vga_write(char *st, size_t len) {
             } else {
                 *(u8*)(0xB8000+screen_cursor*2) = st[i];
                 *(u8*)(0xB8000+screen_cursor*2+1) = attributes;
-                if(screen_cursor > 80*25) vga_scroll_down();
+                if(screen_cursor >= 80*25) vga_scroll_down();
                 else screen_cursor++;
             }
         }

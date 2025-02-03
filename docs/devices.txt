@@ -2,9 +2,11 @@
 
 8086:1237   440FX - 82441FX PMC [Natoma]
 8086:7000   82371SB PIIX3 ISA [Natoma/Triton II]
-1234:1111   Generic QEMU Video Card
+1234:1111   Generic QEMU VGA card
 8086:100E   82540EM Gigabit Ethernet Controller
 8086:2415   82801AA AC'97 Audio Controller
+1B36:0010   QEMU NVM Express Controller
+8086:24CD   82801DB/DBM (ICH4/ICH4-M) USB2 EHCI Controller
 
 ## T480
 
@@ -16,7 +18,7 @@
 8086:9d3a   Sunrise Point-LP CSME HECI #1
 8086:9d10   Sunrise Point-LP PCI Express Root Port #1
 8086:9d18   Sunrise Point-LP PCI Express Root Port #9
-8086:9d4e   Intel(R) 100 Series Chipset Family LPC Controller/eSPI Controller - 9D4E
+8086:9d4e   Intel(R) 100 Series Chipset Family LPC Controller/eSPI Controller
 10de:1d10   GP108M [GeForce MX150]
 8086:24fd   Wireless 8265 / 8275
 8086:15c0   JHL6240 Thunderbolt 3 Bridge (Low Power) [Alpine Ridge LP 2016]

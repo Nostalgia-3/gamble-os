@@ -345,14 +345,13 @@ int shell_main(u32 mem) {
                 run_command(mem);
                 for(int x=0;x<ind;x++) cmdbfr[x] = 0;
                 ind = 0;
-
-                if(running) kprintf("%s", prompt);
             } else {
                 if(ind > sizeof(cmdbfr)) continue;
                 cmdbfr[ind++] = sc;
-                // colorize the command
-                kprintf("\x1b[2K\r%s%s", prompt, cmdbfr);
             }
+
+            char *command = strtok(cmdbfr, ' ');
+            if(running) kprintf("\x1b[2K\r%s%s%s", prompt, command, cmdbfr+strlen(command)); // cmdbfr+strlen(st) \x1b[2K\r
         }
 
     }

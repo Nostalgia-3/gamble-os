@@ -8,12 +8,4 @@ GambleOS needs (relatively) modern versions of 32-bit GNU build tools (`gcc`, `l
 
 ## TODOs
 
-- [ ] A better kernel shell
-  - [ ] A functioning cursor (left & right arrow key support)
-  - [ ] Command history
-- [ ] Real time clock support
-- [ ] Functioning memory allocation
-- [ ] UEFI bootloader
-- [ ] USB Host Controller drivers
-  - [ ] XHCI (USB 3.0/2.0/1.0 Host Controller)
-  - [ ] EHCI (USB 2.0 Host Controller)
+A Trello board that contains the TODOs can be found [here](https://trello.com/b/XvXrglRG/gambleos)
