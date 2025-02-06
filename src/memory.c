@@ -1,6 +1,6 @@
 #include <gosh/gosh.h>
+#include <memory.h>
 #include "types.h"
-#include "memory.h"
 #include "math.h"
 #include "str.h"
 
@@ -92,4 +92,23 @@ int k_get_used() {
 void memcpy(void*dest, void*src, size_t num) {
     for(size_t i=0;i<num;i++)
         *(u8*)(dest+i) = *(u8*)(src+i);
+}
+
+void set_page(void* virt_addr, u64 real_addr, u32 flags) {
+    // virt_addr = ((u32)virt_addr >> 12) << 12;
+    // real_addr = (real_addr >> 12) << 12;
+
+    // uint64_t pdindex = 0;
+}
+
+// Allocate pagecount pages, returning the virtual address. The location of the
+// physical pages is forced to be linear
+void *allocate_linear_pages(u32 pagecount) {
+
+}
+
+// Set count pages starting at page-aligned addr to have the same physical
+// address as virtual address
+void *map_identity_pages(u32* addr, u32 count) {
+
 }

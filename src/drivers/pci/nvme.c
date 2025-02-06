@@ -10,8 +10,8 @@ int nvme_entry(module_t *mod) {
     return DRIVER_SUCCESS;
 }
 
-void nvme_int(module_t *mod, u8 intr) {
-    return;
+int nvme_int(module_t *mod, u8 intr) {
+    return 0;
 }
 
 module_t get_nvme_module() {

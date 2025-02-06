@@ -374,8 +374,8 @@ int ata_entry(module_t *dev) {
     return DRIVER_SUCCESS;
 }
 
-void ata_int(module_t *dev, u8 int_id) {
-    // putc('e');
+int ata_int(module_t *dev, u8 int_id) {
+    return 0;
 }
 
 module_t get_ata_module() {

@@ -78,16 +78,10 @@ void _start(multiboot_info_t *mbd, unsigned int magic) {
 
     if(stdout == -1) {
         kprintf("Failed to open \"/dev/console\"!\n");
-        kpanic();
     }
 
     if(stdin == -1) {
         kprintf("Failed to open \"/dev/kbd\"!\n");
-        kpanic();
-    }
-
-    if(!((u32)i8042.data & 0b10000000)) {
-        kprintf("Failed to initialize PS/2 keyboard and mouse :(\n");
     }
 
     multiboot_uint64_t total_mem = 0;

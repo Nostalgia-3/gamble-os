@@ -145,8 +145,8 @@ int ac97_entry(module_t *mod) {
     // kprintf("AC97 (bus=%u, slot=%u, bar0=%X, bar1=%X)\n", bus, slot, header.bar0 & 0xFFFFFFFC, header.bar1 & 0xFFFFFFFC);
 }
 
-void ac97_int(module_t *mod, u8 intr) {
-
+int ac97_int(module_t *mod, u8 intr) {
+    return 0;
 }
 
 module_t get_ac97_module() {

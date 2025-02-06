@@ -417,8 +417,10 @@ int i8254_start(module_t *mod) {
     return DRIVER_SUCCESS;
 }
 
-void i8254_int(module_t *dev, u8 intr) {
+int i8254_int(module_t *dev, u8 intr) {
     i8254_fire();
+    
+    return 0;
 }
 
 module_t get_i8254_module() {

@@ -5,8 +5,8 @@ int rtl8139_entry(module_t *dev) {
     return DRIVER_SUCCESS;
 }
 
-void rtl8139_int(module_t *dev, u8 intr) {
-
+int rtl8139_int(module_t *dev, u8 intr) {
+    return 0;
 }
 
 module_t get_rtl8139_driver() {

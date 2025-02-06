@@ -16,8 +16,8 @@
 
 // This is REALLY bad, and I really should implement proper memory detection,
 // but I just want to make a functional shell
-#define MEM_BASE    0x00100000 // 0x60000
-#define MEM_END     0x00200000 // 0x7FFFF
+#define MEM_BASE    0x00200000 // 0x60000
+#define MEM_END     0x00300000 // 0x7FFFF
 #define MEM_MAX     (MEM_END-MEM_BASE)
 #define BLOCK_SIZE  32      // 256
 #define MAX_BLOCKS  (u32)((MEM_MAX)/BLOCK_SIZE)
@@ -38,11 +38,17 @@ extern u32 kernel_page_dir[1024];
 extern u32 kernel_page_tables[64][1024];
 
 /// @brief Set a virtual page to a real one
-/// @param virt_addr The 32-bit 4K page-aligned logical address
-/// @param real_addr The 64-bit 4K page-aligned address (only 32-bits until PAE support)
+/// @param virt_addr The 32-bit page-aligned logical address
+/// @param real_addr The 64-bit page-aligned address (only 32-bits until PAE is supported)
 /// @param flags Flags for the page
 void set_page(void* virt_addr, u64 real_addr, u32 flags);
 
-void get_logical_pages(u32 pagecount);
+// Allocate pagecount pages, returning the virtual address. The location of the
+// physical pages is forced to be linear
+void *allocate_linear_pages(u32 pagecount);
+
+// Set count pages starting at page-aligned addr to have the same physical
+// address as virtual address
+void *identity_pages(u32* addr, u32 count);
 
 #endif

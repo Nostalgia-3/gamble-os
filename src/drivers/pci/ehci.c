@@ -10,14 +10,14 @@ int ehci_entry(module_t *mod) {
     return DRIVER_SUCCESS;
 }
 
-void ehci_exit(module_t *mod) {
-
+int ehci_int(module_t *mod, u8 irq) {
+    return 0;
 }
 
 module_t get_ehci_module() {
     return (module_t) {
         .module_start   = ehci_entry,
-        .module_int     = ehci_exit,
+        .module_int     = ehci_int,
         .name           = "ehci",
         .pci_flags = {
             .class = 0x0C,

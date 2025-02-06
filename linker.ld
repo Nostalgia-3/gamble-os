@@ -1,6 +1,6 @@
 ENTRY(_load)
-/* OUTPUT_FORMAT(binary) */
 OUTPUT_FORMAT(elf32-i386)
+/* OUTPUT_FORMAT(binary) */
 
 STARTUP(build/a_kernel-entry.asm.o)
 

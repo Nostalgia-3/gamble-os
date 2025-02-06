@@ -295,10 +295,9 @@ void run_command(multiboot_info_t *mbd) {
     } else if(strcmp("ls", comm) == 0) {
         comm = strtok(NULL, '\0');
         if(strlen(comm) == 0) {
-            kprintf("Format: ls <directory>\n");
-            return;
+            // TODO: replace this with a cwd
+            comm = "/";
         }
-        // kprintf("directory: %s\n", comm);
         
         int dir = open(comm);
         if(dir == -1) {

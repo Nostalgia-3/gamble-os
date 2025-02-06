@@ -15,7 +15,7 @@ const SECOND_STAGE      = 'build/second.bin';   // The next 2KiB of the bootload
 const KERNEL            = 'build/kernel.elf';   // A file that's supposed to be loaded by the bootloader (not yet, though)
 const LINKER_SCRIPT     = 'linker.ld';
 
-const CFLAGS            = `-O2 -m32 -fno-pie -nostdlib -ffreestanding`;
+const CFLAGS            = `-Os -s -m32 -fno-pie -nostdlib -Wall -ffreestanding`;
 
 const INCLUDE           = 'include';
 

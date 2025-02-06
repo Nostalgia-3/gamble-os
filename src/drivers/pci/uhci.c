@@ -43,8 +43,8 @@ int uhci_entry(module_t *mod) {
     return DRIVER_SUCCESS;
 }
 
-void uhci_int(module_t *dev, u8 intr) {
-    return;
+int uhci_int(module_t *dev, u8 intr) {
+    return 0;
 }
 
 module_t get_uhci_module() {
