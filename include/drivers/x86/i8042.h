@@ -34,7 +34,9 @@ typedef struct _I8042_Config {
     u8 _failed              : 1;
 } I8042_Config;
 
-int I8042_DriverEntry(Device *dev);
-void I8042_DriverInt(Device *dev, u8 int_id);
+module_t get_i8042_module();
+
+// int I8042_DriverEntry(Device *dev);
+// void I8042_DriverInt(Device *dev, u8 int_id);
 
 #endif

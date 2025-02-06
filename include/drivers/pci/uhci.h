@@ -4,8 +4,10 @@
 #include <drivers/pci.h>
 #include <gosh/gosh.h>
 
-PCIDriver get_uhci_driver();
-int UCHIDriverEntry(Device *dev);
-void UCHIDriverInt(Device *dev, u8 intr);
+module_t get_uhci_module();
+
+// PCIDriver get_uhci_driver();
+// int UCHIDriverEntry(Device *dev);
+// void UCHIDriverInt(Device *dev, u8 intr);
 
 #endif

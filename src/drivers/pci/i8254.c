@@ -116,18 +116,6 @@ typedef struct _tx_desc {
         volatile u16 special;
 } __attribute__((packed)) tx_desc;
 
-static Driver driver = (Driver) { .name = "I8254.DRV", .DriverEntry = I8254_DriverEntry, .DriverInt = I8254_DriverInt };
-
-PCIDriver get_i8254_driver() {
-    return (PCIDriver) {
-        .vendor = 0x8086,
-        .device = 0x100E,
-        .class  = 0xFF,
-        .subclass = 0xFF,
-        .interface = 0xFF,
-        .driver = &driver
-    };
-}
 static rx_desc *rx_descs[E1000_NUM_RX_DESC];
 static tx_desc *tx_descs[E1000_NUM_TX_DESC];
 static bool         bar_type;
@@ -333,11 +321,9 @@ bool send_packet(void *p_data, u16 p_len) {
     return 0;
 }
 
-int I8254_DriverEntry(Device *dev) {
-    Driver* driver = (Driver*)dev->data;
-    u32 d = (u32)driver->data;
-    u8 bus = d & 0xFF;
-    u8 slot = (d >> 8) & 0xFF;
+int i8254_start(module_t *mod) {
+    u8 bus  = mod->pci_flags.r_bus;
+    u8 slot = mod->pci_flags.r_bus;
 
     GenPCIHeader header = pci_get_gen_header(bus, slot);
 
@@ -361,7 +347,7 @@ int I8254_DriverEntry(Device *dev) {
 
     for(int i=0;i<0x80;i++)
         write_comm(0x5200+i*4, 0);
-    k_register_int((Driver*)dev->data, header.interrupt_line+0x20);
+    k_register_int(mod, header.interrupt_line+0x20);
     enable_ints();
     rxinit();
     txinit();
@@ -431,6 +417,21 @@ int I8254_DriverEntry(Device *dev) {
     return DRIVER_SUCCESS;
 }
 
-void I8254_DriverInt(Device *dev, u8 intr) {
+void i8254_int(module_t *dev, u8 intr) {
     i8254_fire();
+}
+
+module_t get_i8254_module() {
+    return (module_t) {
+        .name = "i8254",
+        .module_start = i8254_start,
+        .module_int = i8254_int,
+        .pci_flags = {
+            .vendor = 0x8086,
+            .device = 0x100E,
+            .class  = 0xFF,
+            .subclass = 0xFF,
+            .interface = 0xFF
+        }
+    };
 }

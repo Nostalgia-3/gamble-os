@@ -3,12 +3,11 @@
 
 #include <gosh/common.h>
 
-typedef struct _MouseDeviceData {
+typedef struct _mouse_data_t {
     u8 buttons_down;
     u16 x;
     u16 y;
-
-    void (*update_handler)(Device *dev);
-} MouseDeviceData;
+    u8 id;
+} mouse_data_t;
 
 #endif//GOSH_MOUSE_H

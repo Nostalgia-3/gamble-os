@@ -72,7 +72,7 @@ void exception_handler(struct regs d) { // struct regs d
     // unsigned int edi, esi, ebp, esp, ebx, edx, ecx, eax;
     // unsigned int eip, cs, eflags, useresp, ss;
     kprintf(
-        "Exception \"%s\"\nEAX=%08X EBX=%08X ECX=%08X EDX=%08X\nESI=%08X EDI=%08X EBP=%08X ESP=%08X\nEIP=%08X EFL=%08X  CS=%08X  SS=%08X USP=%08X\n",
+        "Exception \"%s\"\nEAX=%08X EBX=%08X ECX=%08X EDX=%08X\nESI=%08X EDI=%08X EBP=%08X ESP=%08X\nEIP=%08X EFL=%08X  CS=%08X  SS=%08X\nUSP=%08X\n",
         exception_messages[d.err],
         d.eax, d.ebx, d.ecx, d.edx,
         d.esi, d.edi, d.ebp, d.esp,

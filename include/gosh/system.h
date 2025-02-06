@@ -4,22 +4,8 @@
 #include <types.h>
 #include <gosh/common.h>
 
-typedef enum TaskType {
-    // Task is called repeatedly
-    TASK_TYPE_PERIODIC_INTERRUPT,
-    // Task is called once after some amount of time
-    TASK_TYPE_SINGLE_INTERRUPT
-} TaskType_t;
-
 // Waits some amount of milliseconds. This is blocking
 void    wait(u32 ms);
-
-// Create a task, with a type and millisecond, returning the ID of the task, or
-// -1 if it failed to create a task
-int     add_task(void (*handler), TaskType_t type, u32 ms);
-
-// Free the task with the id passed
-void    free_task(int id);
 
 // The ID used when the kernel creates devices and such
 #define KERNEL_ID 0x8008

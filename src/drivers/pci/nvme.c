@@ -4,23 +4,27 @@
 #include <types.h>
 #include <port.h>
 
-static Driver driver = { .name = "NVME.DRV", .DriverEntry=NVME_DriverEntry, .DriverInt=NVME_DriverInt };
+// static Driver driver = { .name = "NVME.DRV", .DriverEntry=NVME_DriverEntry, .DriverInt=NVME_DriverInt };
 
-PCIDriver get_nvme_driver() {
-    return (PCIDriver) {
-        .vendor = 0xFFFF,
-        .device = 0xFFFF,
-        .class  = 0x01,
-        .subclass = 0x08,
-        .interface = 0xFF,
-        .driver = &driver
-    };
-}
-
-int NVME_DriverEntry(Device *dev) {
+int nvme_entry(module_t *mod) {
     return DRIVER_SUCCESS;
 }
 
-void NVME_DriverInt(Device *dev, u8 intr) {
+void nvme_int(module_t *mod, u8 intr) {
+    return;
+}
 
+module_t get_nvme_module() {
+    return (module_t) {
+        .name           = "nvme",
+        .module_start   = nvme_entry,
+        .module_int     = nvme_int,
+        .pci_flags = {
+            .vendor = 0xFFFF,
+            .device = 0xFFFF,
+            .class  = 0x01,
+            .subclass = 0x08,
+            .interface = 0xFF
+        }
+    };
 }

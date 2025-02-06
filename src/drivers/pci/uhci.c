@@ -34,30 +34,30 @@ typedef struct _UHCI_IO {
     u16 portsc2;
 } UHCI_IO;
 
-static Driver driver = { .name = "UHCI.DRV", .DriverEntry = UCHIDriverEntry, .DriverInt = UCHIDriverInt };
-
-PCIDriver get_uhci_driver() {
-    return (PCIDriver) {
-        .class = 0x0C,
-        .subclass = 0x03,
-        .interface = 0x00,
-        .device = 0xFFFF,
-        .vendor = 0xFFFF,
-        .driver = &driver
-    };
-}
-
-int UCHIDriverEntry(Device *dev) {
-    Driver* driver = (Driver*)dev->data;
-    u32 d = (u32)driver->data;
-
-    u8 bus = d & 0xFF;
-    u8 slot = (d >> 8) & 0xFF;
+int uhci_entry(module_t *mod) {
+    u8 bus  = mod->pci_flags.r_bus;
+    u8 slot = mod->pci_flags.r_slot;
 
     kprintf("UCHI detected (pci bus = %u, pci slot = %u)\n", bus, slot);
+
     return DRIVER_SUCCESS;
 }
 
-void UCHIDriverInt(Device *dev, u8 intr) {
-    
+void uhci_int(module_t *dev, u8 intr) {
+    return;
+}
+
+module_t get_uhci_module() {
+    return (module_t) {
+        .name = "uhci",
+        .module_start = uhci_entry,
+        .module_int = uhci_int,
+        .pci_flags = {
+            .class = 0x0C,
+            .subclass = 0x03,
+            .interface = 0x00,
+            .device = 0xFFFF,
+            .vendor = 0xFFFF
+        }
+    };
 }

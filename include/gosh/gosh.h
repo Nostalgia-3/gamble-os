@@ -10,7 +10,7 @@
 #define GOSH_H
 
 #include "common.h"
-#include "device.h"
+#include "devices.h"
 #include "driver.h"
 #include "fb.h"
 #include "fs.h"
@@ -19,6 +19,6 @@
 #include "net.h"
 #include "pcie.h"
 #include "system.h"
-#include "vt.h"
+#include "pipe.h"
 
 #endif

@@ -25,10 +25,9 @@ u32 hatoi(char*);
 #define is_printable(c) (((c) >= 32 && (c) <= 126) ? TRUE : FALSE)
 #define is_digit(c) (((c) >= '0' && (c) <= '9') ? TRUE : FALSE)
 
+const char *get_last_del(const char *st, char del);
 size_t strlen(char *s1);
-
 int strcmp(char *s1, char *s2);
-
 char* strtok(char *str, char del);
 
 #endif

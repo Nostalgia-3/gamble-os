@@ -1,6 +1,7 @@
 // @ts-types="npm:@types/ws"
 import { WebSocketServer } from 'npm:ws';
 import p from 'node:path';
+import { existsSync } from 'node:fs';
 
 /**
  * Return the last portion of a path. This is typically used
@@ -29,10 +30,10 @@ export function ext(file: string, ext: string) {
  * @param cont whether to continue running if the program fails
  */
 export function call(command: string, cont = false) {
-    const secs = command.split(' ')
+    const secs = command.split(' ');
     const fn = secs.shift();
     if(!fn) return;
-    console.log('\x1b[90m[\x1b[37m>\x1b[90m]\x1b[0m', command);
+    verbose(`\x1b[90m[\x1b[32m?\x1b[90m]\x1b[0m ${command}`);
     const com = new Deno.Command(fn, { args: secs, stdout: 'inherit', stdin: 'inherit', stderr: 'inherit' });
     const resp = com.outputSync();
     if(!resp.success) {
@@ -104,7 +105,7 @@ export function exCall(s: string, ip?: string, port = 8086) {
         const ws = new WebSocket(`ws://${ip ?? '127.0.0.1'}:${port}`);
         
         ws.addEventListener('open', () => {
-            console.log(`\x1b[90m[\x1b[34m>\x1b[90m]\x1b[0m ${s}`);
+            verbose(`\x1b[90m[\x1b[34m>\x1b[90m]\x1b[0m ${s}`);
             ws.send(`r::${s}`);
             ws.close();
         });
@@ -124,4 +125,49 @@ export function exCall(s: string, ip?: string, port = 8086) {
         console.error(`\x1b[90m[\x1b[31m%\x1b[90m]\x1b[0m Failed to send`);
         console.error(e);
     }
+}
+
+/**
+ * Recursively create directories if they don't exist
+ * @param s The directory
+ */
+export function dirExist(s: string, shouldExist: boolean = true) {
+    if(!existsSync(s) && shouldExist) {
+        verbose(`\x1b[90m[\x1b[32m@\x1b[90m]\x1b[0m mkdir -r "${s}"`);
+        Deno.mkdirSync(s, { recursive: true });
+    } else if(existsSync(s) && !shouldExist) {
+        verbose(`\x1b[90m[\x1b[32m@\x1b[90m]\x1b[0m rmdir -r "${s}"`);
+        Deno.removeSync(s, { recursive: true });
+    }
+}
+
+export function removeDir(s: string) {
+    if(!existsSync(s)) return;
+    verbose(`\x1b[90m[\x1b[32m@\x1b[90m]\x1b[0m rmdir -r "${s}"`);
+    Deno.removeSync(s, { recursive: true });
+}
+
+export function copyFile(src: string, dest: string) {
+    if(!existsSync(src)) return false;
+    verbose(`\x1b[90m[\x1b[32m@\x1b[90m]\x1b[0m COPY "${src}" "${dest}"`);
+    Deno.copyFileSync(src, dest);
+    
+    return true;
+}
+
+export function assert(truthy: boolean, reason?: string) {
+    if(!truthy) {
+        console.error(`\x1b[90m[\x1b[31m%\x1b[90m]\x1b[0m ${reason ?? 'No reason given.'}`);
+        Deno.exit(1);
+    }
+}
+
+let vb = true;
+export function setVerbose(b: boolean = true) {
+    vb = b;
+}
+
+export function verbose(s: string) {
+    if(!vb) return;
+    console.log(s);
 }

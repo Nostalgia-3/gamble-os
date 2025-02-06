@@ -57,17 +57,15 @@ const char* DEVTYPE_ST[] = {
 static u16 WIDTH    = 0;
 static u16 HEIGHT   = 0;
 
-static u16 curx     = 0;
-static u16 cury     = 0;
 
 static u8 cur_color = 15;
 
 static u8 cmdbfr[80];
 static u8 ind = 0;
 
-static Device *fb;
-static Device *vt;
-static FBInfo info;
+// static Device *fb;
+// static Device *vt;
+// static FBInfo info;
 
 static u8 running = TRUE;
 
@@ -76,13 +74,7 @@ static u32 prevind = 0;
 static bool in_color = FALSE;
 
 void clear_screen() {
-    fb_clear(fb, 0);
-    curx = 0;
-    cury = 0;
-}
-
-void putc(u8 c) {
-    kprintf("%c", c);
+    // kprintf("\x1b[2J");
 }
 
 #include <math.h>
@@ -122,23 +114,21 @@ void hexdump(u8* addr, u32 size) {
 }
 
 
-void run_command(u32 mem) {
+void run_command(multiboot_info_t *mbd) {
     u8* comm = strtok(cmdbfr, ' ');
 
     if(strcmp("", comm) == 0) {
     } else if(strcmp("help", comm) == 0) {
-        kprintf("\x1b[97m");
         kprintf("Commands:\n");
-        kprintf("  list     <subcommand>        list system data\n");
-        kprintf("  cls                          clears the terminal\n");
-        kprintf("  color    <color>             set the foreground text color\n");
-        kprintf("  hexdump  <addr> <count>      hexdump count bytes at addr\n");
-        kprintf("  read     <did> <sec> <addr>  Read a sector from a drive\n");
-        kprintf("  mount    <drive> <st:path>   Mount a drive\n");
-        kprintf("  malloc   <size>              Allocate memory and output the address\n");
-        kprintf("  hreset                       Hard restart\n");
-        kprintf("  in[b/l]  <port>              Read data from a system port\n");
-        kprintf("  out[b/l] <port> <data>       Write data to a system port\n");
+        kprintf("  \x1b[93mlist\x1b[90m     <subcommand>        \x1b[0mlist system data\n");
+        kprintf("  \x1b[93mcls\x1b[90m                          \x1b[0mclears the terminal\n");
+        kprintf("  \x1b[93mhexdump\x1b[90m  <addr> <count>      \x1b[0mhexdump count bytes at addr\n");
+        kprintf("  \x1b[93mread\x1b[90m     <did> <sec> <addr>  \x1b[0mRead a sector from a drive\n");
+        kprintf("  \x1b[93mmount\x1b[90m    <drive> <st:path>   \x1b[0mMount a drive\n");
+        kprintf("  \x1b[93mmalloc\x1b[90m   <size>              \x1b[0mAllocate memory and output the address\n");
+        kprintf("  \x1b[93mhreset\x1b[90m                       \x1b[0mHard restart\n");
+        kprintf("  \x1b[93min[b/l]\x1b[90m  <port>              \x1b[0mRead data from a system port\n");
+        kprintf("  \x1b[93mout[b/l]\x1b[90m <port> <data>       \x1b[0mWrite data to a system port\n");
         kprintf("\x1b[0m", cur_color);
     } else if(strcmp("list", comm) == 0) {
         comm = strtok(NULL, ' ');
@@ -158,36 +148,39 @@ void run_command(u32 mem) {
                 }
             }
         } else if(strcmp("mem", comm) == 0) {
-            for(u16 i=0;i<mem;i++) {
-                struct MemoryEntry* e = (struct MemoryEntry*)(0x1000);
-                kprintf("0x%08X%08X | 0x%08X%08X | %u\n", e[i].base2, e[i].base1, e[i].len2, e[i].len1, e[i].type);
+            for(int i=0;i<mbd->mmap_length;i+=sizeof(multiboot_memory_map_t))  {
+                multiboot_memory_map_t* mmmt =  (multiboot_memory_map_t*) (mbd->mmap_addr + i);
+
+                kprintf(
+                    "0x%08X%08X | 0x%08X%08X | %u\n",
+                    (u32)(mmmt->addr >> 32), (u32)(mmmt->addr & 0xFFFFFFFF),
+                    (u32)(mmmt->len >> 32), (u32)(mmmt->len & 0xFFFFFFFF),
+                    mmmt->type
+                );
             }
         } else if(strcmp("stats", comm) == 0) {
             kprintf("Memory usage: %uKiB / %uKiB\n", k_get_used()/1024, MEM_MAX/1024);
-        } else if(strcmp("devs", comm) == 0) {
-            Device* devs    = get_gdevt();
-            u32 devsize     = get_gdevt_len();
-            for(int i=0;i<devsize;i++) {
-                if(!devs[i].is_active) continue;
-                kprintf("%03u: %s (id=%03u, owner = 0x%X)\n", i, DEVTYPE_ST[devs[i].type], devs[i].id, devs[i].owner);
-            }
         } else if(strcmp("", comm) == 0) {
             kprintf("Subcommands:\n  pci - list all connected pci devices\n  mem - list all memory segments\n  stats - list OS stats\n  devs - list OS devices\n");
+        } else if(strcmp("devs", comm) == 0) {
+            device_t** devs = get_devices();
+            u16 col = 0;
+            for(int i=0;i<get_total_devices();i++) {
+                if(devs[i] != NULL) {
+                    if((col + strlen((char*)devs[i]->name) + 1) > 80) {
+                        kprintf("\n");
+                        col = 0;
+                    }
+                    kprintf("%s ", devs[i]->name);
+                    col += strlen((char*)devs[i]->name) + 1;
+                }
+            }
+            kprintf("\n");
         } else {
-            kprintf("Unkown list subcommand: \"");
-            kprintf(comm);
-            kprintf("\"\n");
+            kprintf("Unkown list subcommand: \"%s\"\n", comm);
         }
-    } else if(strcmp("cls", comm) == 0) {
+    } else if(strcmp("cls", comm) == 0 || strcmp("clear", comm) == 0) {
         kprintf("\x1b[2J");
-    } else if(strcmp("color", comm) == 0) {
-        comm = strtok(NULL, ' ');
-        if(strlen(comm) == 0) {
-            kprintf("Format: color <col>\n");
-        } else {
-            u32 s = atoi(comm);
-            cur_color = (u8)s;
-        }
     } else if(strcmp("hexdump", comm) == 0) {
         bool successful = TRUE;
         comm = strtok(NULL, ' ');
@@ -204,41 +197,41 @@ void run_command(u32 mem) {
             kprintf("Format: hexdump <addr> <size>\n");
         }
     } else if(strcmp("read", comm) == 0) {
-        comm = strtok(NULL, ' ');
-        u32 did = atoi(comm);
-        comm = strtok(NULL, ' ');
-        u32 sector = hatoi(comm);
-        comm = strtok(NULL, ' ');
-        u32 addr = hatoi(comm);
-        Device *dev = k_get_device_by_id(did, DEV_UNKNOWN);
-        if(dev == NULL || addr == NULL) {
-            kprintf("Format: read <int:drive id> <hex:sector> <hex:addr>\n");
-        }
+        // comm = strtok(NULL, ' ');
+        // u32 did = atoi(comm);
+        // comm = strtok(NULL, ' ');
+        // u32 sector = hatoi(comm);
+        // comm = strtok(NULL, ' ');
+        // u32 addr = hatoi(comm);
+        // Device *dev = k_get_device_by_id(did, DEV_UNKNOWN);
+        // if(dev == NULL || addr == NULL) {
+        //     kprintf("Format: read <int:drive id> <hex:sector> <hex:addr>\n");
+        // }
 
-        DriveDeviceData* d = (DriveDeviceData*)dev->data;
-        if(d->read_sector) {
-            d->read_sector(dev, sector, (u8*)addr);
-            kprintf("Read one sector.\n");
-        } else {
-            kprintf("Drive has no read_sector() function!\n");
-        }
+        // DriveDeviceData* d = (DriveDeviceData*)dev->data;
+        // if(d->read_sector) {
+        //     d->read_sector(dev, sector, (u8*)addr);
+        //     kprintf("Read one sector.\n");
+        // } else {
+        //     kprintf("Drive has no read_sector() function!\n");
+        // }
     } else if(strcmp("mount", comm) == 0) {
-        comm = strtok(NULL, ' ');
-        u32 did = atoi(comm);
-        if(strcmp(comm, "") == 0) {
-            kprintf("Format: mount <int: id> <string: path>\n");
-            return;
-        }
+        // comm = strtok(NULL, ' ');
+        // u32 did = atoi(comm);
+        // if(strcmp(comm, "") == 0) {
+        //     kprintf("Format: mount <int: id> <string: path>\n");
+        //     return;
+        // }
 
-        comm = strtok(NULL, ' ');
-        if(strcmp(comm, "") == 0) {
-            kprintf("Format: mount <int: id> <string: path>\n");
-            return;
-        }
+        // comm = strtok(NULL, ' ');
+        // if(strcmp(comm, "") == 0) {
+        //     kprintf("Format: mount <int: id> <string: path>\n");
+        //     return;
+        // }
 
-        if(!mount_drive(k_get_device_by_id(did, DEV_UNKNOWN), comm)) {
-            kprintf("Mounting failed.\n");
-        }
+        // if(!mount_drive(k_get_device_by_id(did, DEV_UNKNOWN), comm)) {
+        //     kprintf("Mounting failed.\n");
+        // }
     } else if(strcmp("malloc", comm) == 0) {
         comm = strtok(NULL, ' ');
         u32 did = hatoi(comm);
@@ -299,14 +292,50 @@ void run_command(u32 mem) {
         }
 
         outl(port & 0xFFFF, val);
-    } else if(strcmp("curat", comm) == 0) {
-        kprintf("%u, %u\n", curx, cury);
+    } else if(strcmp("ls", comm) == 0) {
+        comm = strtok(NULL, '\0');
+        if(strlen(comm) == 0) {
+            kprintf("Format: ls <directory>\n");
+            return;
+        }
+        // kprintf("directory: %s\n", comm);
+        
+        int dir = open(comm);
+        if(dir == -1) {
+            kprintf("Failed to open \"%s\": no such directory\n", comm);
+            return;
+        }
+        dirent ent = {0};
+        int c = getdents(dir, &ent, 0);
+
+        if(c == -1) {
+            kprintf("Failed to read directory \"%s\"\n", comm);
+            close(dir);
+            return;
+        }
+
+        for(int i=0;i<c;i++) {
+            getdents(dir, &ent, i);
+            switch(ent.d_type) {
+                case DT_DIR:
+                    kprintf("\x1b[94m");
+                break;
+
+                case DT_DEV:
+                    kprintf("\x1b[93m\x1b[44m");
+                break;
+            }
+            kprintf("%s\x1b[0m ", ent.d_name);
+        }
+
+        kprintf("\n");
+        close(dir);
     } else {
         kprintf("Unknown command \"%s\"\n", comm);
     }
 }
 
-int shell_main(u32 mem) {
+int shell_main(multiboot_info_t *mbd) {
     const char* prompt = "\x1b[94mShell\x1b[0m> ";
 
     clear_screen();
@@ -316,8 +345,11 @@ int shell_main(u32 mem) {
 
     bool extra = FALSE;
 
+    u8 sc = '\0';
+
     while(running) {
-        u8 sc = scanc();
+        ssize_t b = read(STDIN, &sc, 1);
+        if(b == 0 || sc == '\0') continue;
 
         if(extra) {
             if (sc == 0x4B) {
@@ -342,7 +374,7 @@ int shell_main(u32 mem) {
                 }
             } else if(sc == '\n') {
                 putc(sc);
-                run_command(mem);
+                run_command(mbd);
                 for(int x=0;x<ind;x++) cmdbfr[x] = 0;
                 ind = 0;
             } else {
@@ -350,8 +382,11 @@ int shell_main(u32 mem) {
                 cmdbfr[ind++] = sc;
             }
 
-            char *command = strtok(cmdbfr, ' ');
-            if(running) kprintf("\x1b[2K\r%s%s%s", prompt, command, cmdbfr+strlen(command)); // cmdbfr+strlen(st) \x1b[2K\r
+            char *comr = strtok(cmdbfr, ' ');
+            char apple[80];
+            memset(apple, 0, 80);
+            for(int i=0;i<strlen(comr);i++) apple[i] = comr[i];
+            if(running) kprintf("\x1b[2K\r%s\x1b[93m%s\x1b[0m%s", prompt, apple, cmdbfr+strlen(comr)); // cmdbfr+strlen(st) \x1b[2K\r
         }
 
     }

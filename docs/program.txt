@@ -1,0 +1,8 @@
+Stored program data:
+
+eax, ebx, ecx, edx, esp,
+ebp, esi, edi, eip, cs(?),
+
+page information:
+
+page_tables

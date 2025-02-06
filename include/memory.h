@@ -34,12 +34,15 @@ int k_get_used();
 
 void memcpy(void*dest, void*src, size_t num);
 
-// #define PAGE_SIZE   4096
+extern u32 kernel_page_dir[1024];
+extern u32 kernel_page_tables[64][1024];
 
-// // Allocate PAGE_SIZE bytes of memory
-// void* alloc_page();
+/// @brief Set a virtual page to a real one
+/// @param virt_addr The 32-bit 4K page-aligned logical address
+/// @param real_addr The 64-bit 4K page-aligned address (only 32-bits until PAE support)
+/// @param flags Flags for the page
+void set_page(void* virt_addr, u64 real_addr, u32 flags);
 
-// // Free a page
-// void free_page(void* page);
+void get_logical_pages(u32 pagecount);
 
 #endif

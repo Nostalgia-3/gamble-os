@@ -4,7 +4,6 @@
 import yargs from 'npm:yargs';
 
 import { existsSync } from 'node:fs';
-import path from 'node:path';
 
 import * as m from './m.ts';
 
@@ -15,9 +14,6 @@ const MBR               = 'build/mbr.bin';      // The first 512 bytes of the bo
 const SECOND_STAGE      = 'build/second.bin';   // The next 2KiB of the bootloader
 const KERNEL            = 'build/kernel.elf';   // A file that's supposed to be loaded by the bootloader (not yet, though)
 const LINKER_SCRIPT     = 'linker.ld';
-
-const MAX_KERNEL_SIZE   = 1024*512;             // This is accurate enough
-const FILE_SIZE         = 1024;                 // Size of the output .img file in 512-byte sectors (512KiB)
 
 const CFLAGS            = `-O2 -m32 -fno-pie -nostdlib -ffreestanding`;
 
@@ -60,6 +56,23 @@ yargs(Deno.args)
         description: 'Specifify a specific binary for nasm',
         default: 'nasm'
     })
+    .option('efi', {
+        type: 'boolean',
+        description: 'Specify whether to include EFI programs',
+        default: false
+    })
+    .option('verbose', {
+        type: 'boolean',
+        alias: 'v',
+        description: 'Toggle verbose messages while building',
+        default: false
+    })
+    .option('clean', {
+        type: 'boolean',
+        alias: 'c',
+        description: 'Run a clean build, deleting the build/** directory',
+        default: false
+    })
 .parseSync();
 
 function emulate(pargs: Record<string, unknown>) {
@@ -87,7 +100,7 @@ function emulate(pargs: Record<string, unknown>) {
         `-drive if=none,file=./disk.img,format=raw,id=stick`,
         
         // NVMe drive
-        `-drive file=nvm.img,if=none,id=nvm`,
+        `-drive file=nvm.img,format=raw,if=none,id=nvm`,
         `-device nvme,serial=test,drive=nvm`, // serial=nvmedrive,
 
         // AC97 audio card
@@ -104,7 +117,10 @@ function emulate(pargs: Record<string, unknown>) {
         '-device usb-storage,bus=ehci.0,drive=stick',
 
         // RAM
-        `-m 1G`
+        `-m 1G`,
+
+        // Debugging
+        // `-d int,cpu_reset`
     ];
 
     if(pargs.exip == undefined) {
@@ -115,12 +131,14 @@ function emulate(pargs: Record<string, unknown>) {
 }
 
 function build(pargs: Record<string, unknown>) {
-    if(!existsSync('build')) {
-        Deno.mkdirSync('build');
+    m.setVerbose(pargs.verbose as boolean);
+
+    if(pargs.clean && existsSync('build/')) {
+        m.removeDir('build');
     }
 
-    if(!existsSync('build/iso')) {
-        Deno.mkdirSync('build/iso');
+    if(!existsSync('build')) {
+        Deno.mkdirSync('build');
     }
 
     for(const bin of m.scanDir('build/', /\.iso$/)) {
@@ -150,28 +168,22 @@ function build(pargs: Record<string, unknown>) {
         ) m.call(`${pargs.gcc} -I ${INCLUDE} ${CFLAGS} -c -o build/${m.ext(m.base(c), '.c.o')} ${c}`);
     }
 
-    m.call(`${pargs.gcc} ${CFLAGS} -T ${LINKER_SCRIPT} -o ${KERNEL} ${objs.join(' ')}`);
-    
-    const fMBR = Deno.readFileSync(MBR);
-    const fKERNEL = Deno.readFileSync(KERNEL);
-    const fSECOND = Deno.readFileSync(SECOND_STAGE);
-    
-    console.log(`kernel size: ${fKERNEL.length} bytes (bytes remaining: ${MAX_KERNEL_SIZE - fKERNEL.length})`);
-
-    const fBOOT = new Uint8Array(FILE_SIZE*512);
-    fBOOT.set(fMBR);
-    fBOOT.set(fSECOND, fMBR.length);
-    fBOOT.set(fKERNEL, fMBR.length+fSECOND.length);
+    m.call(`${pargs.gcc} ${CFLAGS} -z noexecstack -T ${LINKER_SCRIPT} -o ${KERNEL} ${objs.filter((v)=>v!='build/a_kernel-entry.asm.o').join(' ')}`);
     
     const outFile   = `${pargs.output ?? 'build/kernel'}${pargs['no-date'] ? '' : `-${date}`}.iso`;
 
-    // Deno.writeFileSync(outFile, fBOOT);
+    m.dirExist('build/iso/sys');
+    m.dirExist('build/iso/boot/grub');
+    m.dirExist('build/iso/EFI/BOOT', pargs.efi as boolean ?? false);
+    if(pargs.efi) {
+        m.assert(m.copyFile('resources/BOOTX64.EFI', 'build/iso/EFI/BOOT/BOOTX64.EFI'), `Failed to find "resources/BOOTX64.EFI"`);
+        m.assert(m.copyFile('resources/BOOTIA386.EFI', 'build/iso/EFI/BOOT/BOOTIA386.EFI'), `Failed to find "resources/BOOTXIA386.EFI"`);
+    } else {
+        m.removeDir('build/iso/EFI');
+    }
 
-    // Make a GRUB iso
-    if(!existsSync('build/iso/sys')) Deno.mkdirSync('build/iso/sys');
-    if(!existsSync('build/iso/boot/grub')) Deno.mkdirSync('build/iso/boot/grub', { recursive: true });
-    Deno.copyFileSync('grub.cfg', 'build/iso/boot/grub/grub.cfg');
-    Deno.copyFileSync(KERNEL, 'build/iso/sys/kernel.elf');
+    m.copyFile('grub.cfg', 'build/iso/boot/grub/grub.cfg');
+    m.copyFile(KERNEL, 'build/iso/sys/kernel.elf');
 
     m.call(`grub-mkrescue -o ${outFile} build/iso`);
 

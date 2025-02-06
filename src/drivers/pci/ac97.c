@@ -83,7 +83,7 @@
 #define SPCR        0x6B
 #define SDM         0x80
 
-static Driver driver = { .name = "AC97.DRV", .DriverEntry=AC97_DriverEntry, .DriverInt=AC97_DriverInt };
+// static Driver driver = { .name = "AC97.DRV", .DriverEntry=AC97_DriverEntry, .DriverInt=AC97_DriverInt };
 static bool headphones_connected;
 
 typedef struct _AC97BufferEntry {
@@ -96,22 +96,9 @@ typedef struct _AC97BufferEntry {
 
 AC97BufferEntry *buf_mem;
 
-PCIDriver get_ac97_driver() {
-    return (PCIDriver) {
-        .vendor = 0xFFFF,
-        .device = 0xFFFF,
-        .class  = 0x04,
-        .subclass = 0x01,
-        .interface = 0xFF,
-        .driver = &driver
-    };
-}
-
-int AC97_DriverEntry(Device *dev) {
-    Driver* driver = (Driver*)dev->data;
-    u32 d = (u32)driver->data;
-    u8 bus = d & 0xFF;
-    u8 slot = (d >> 8) & 0xFF;
+int ac97_entry(module_t *mod) {
+    u8 bus = mod->pci_flags.r_bus;
+    u8 slot = mod->pci_flags.r_slot;
 
     GenPCIHeader header = pci_get_gen_header(bus, slot);
     pci_set_comm(PCI_IO_SPACE | PCI_BUS_MASTER, bus, slot);
@@ -158,6 +145,21 @@ int AC97_DriverEntry(Device *dev) {
     // kprintf("AC97 (bus=%u, slot=%u, bar0=%X, bar1=%X)\n", bus, slot, header.bar0 & 0xFFFFFFFC, header.bar1 & 0xFFFFFFFC);
 }
 
-void AC97_DriverInt(Device *dev, u8 intr) {
+void ac97_int(module_t *mod, u8 intr) {
 
+}
+
+module_t get_ac97_module() {
+    return (module_t) {
+        .name = "ac97",
+        .module_start = ac97_entry,
+        .module_int = ac97_int,
+        .pci_flags = {
+            .vendor = 0xFFFF,
+            .device = 0xFFFF,
+            .class  = 0x04,
+            .subclass = 0x01,
+            .interface = 0xFF,
+        }
+    };
 }

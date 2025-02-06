@@ -3,4 +3,4 @@
 Virtual addressing space:
 
 The kernel is always loaded at
-Kernel: 0xC0000000 - 0xFFFFFFFF
+Kernel: 0xF0000000 - 0xFFFFFFFF (256 MiB)

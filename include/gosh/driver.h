@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DRIVER_H
+#define DRIVER_H
 
 #include <types.h>
 #include <gosh/common.h>
@@ -6,41 +7,52 @@
 #define DRIVER_SUCCESS  0
 #define DRIVER_FAILED   1
 
-typedef enum _ConnType {
-    CONN_PCI,
-    CONN_USB
-} ConnType;
+typedef struct _pci_flags_t {
+    u16 vendor;
+    u16 device;
+    u8 class;
+    u8 subclass;
+    u8 interface;
 
-typedef struct _Connection {
-    ConnType type; // This is zero for PCI and one for USB
-} Connection;
+    // The bus the PCI device is on; set by the module loader
+    u8 r_bus;
+    // The slot the PCI device is in; set by the module loader
+    u8 r_slot;
+} pci_flags_t;
 
-typedef struct _Driver {
-    // The irqs the driver listens to
+typedef struct _module_t module_t;
+
+typedef struct _module_t {
+    // Bitfield of active interrupts
     u8 r_active_ints[32];
-    // The identifier of the driver (used for creating devices)
-    size_t r_id;
-    // The null-terminated string for the name of a driver
-    u8* name;
-    // Generic data
+    // The id of the module
+    size_t id;
+    // The name of the module
+    const char *name;
+    // A value owned by the module
     void *data;
-    
-    // Called when the driver is created (the system starts, in most cases).
-    // The device passed is the driver psuedo-device
-    int (*DriverEntry)(Device *dev);
-    // Called when a registered interrupt is called
-    void (*DriverInt)(Device *dev, u8 int_id);
-    // Called when a PCI/USB device is connected
-    void (*DriverConnection)(Device *driver, Connection conn);
-    // Called when the driver is destroyed (the system closes, in most cases)
-    void (*DriverEnd)();
-} Driver;
 
-// Load a driver into the system, returning 0 if the driver loaded successfully, and any other number otherwise
-int load_driver(Driver* driver);
+    // PCI Flags (disable by setting .vendor = 0)
+    pci_flags_t pci_flags;
 
-// Unload a driver from the system
-void unload_driver(u32 id);
+    // Called when the module is opened
+    int (*module_start)(module_t *mod);
+    // Called when the module recieves an interrupt
+    int (*module_int)(module_t *mod, u8 irq);
+    // Called when the module is closed
+    int (*module_end)(module_t *mod);
+} module_t;
+
+int _setup_module_manager();
+
+// Open a module into the system, returning 0 if successful.
+int open_module(module_t* module);
+
+// Unload a module from the system
+void close_module(module_t *module);
 
 // Connect an interrupt to a driver
-bool k_register_int(Driver *driver, u8 int_id);
+int k_register_int(module_t *mod, u8 int_id);
+int k_unregister_int(module_t *mod, u8 int_id);
+
+#endif//DRIVER_H

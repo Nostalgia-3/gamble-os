@@ -4,8 +4,10 @@
 #include <gosh/gosh.h>
 #include <drivers/pci.h>
 
-PCIDriver get_i8254_driver();
-int I8254_DriverEntry(Device *dev);
-void I8254_DriverInt(Device *dev, u8 intr);
+module_t get_i8254_module();
+
+// PCIDriver get_i8254_driver();
+// int I8254_DriverEntry(Device *dev);
+// void I8254_DriverInt(Device *dev, u8 intr);
 
 #endif

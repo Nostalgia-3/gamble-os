@@ -4,8 +4,10 @@
 #include <drivers/pci.h>
 #include <gosh/gosh.h>
 
-PCIDriver get_ehci_driver();
-int ECHIDriverEntry(Device *dev);
-void ECHIDriverInt(Device *dev, u8 intr);
+module_t get_ehci_module();
+
+// PCIDriver get_ehci_driver();
+// int ECHIDriverEntry(Device *dev);
+// void ECHIDriverInt(Device *dev, u8 intr);
 
 #endif

@@ -36,48 +36,57 @@ void _start(multiboot_info_t *mbd, unsigned int magic) {
     init_mem();
     kprintf("[\x1b[92m+\x1b[0m] Initialized memory\n");
 
-    int gde = _init_gdevt();
-    if(gde || get_gdevt() == NULL) {
-        kprintf("[\x1b[91m-\x1b[0m] Failed initializing gdevt with error #%u\n", gde);
+    _setup_device_manager();
+    int gde = _setup_module_manager();
+    _init_vfs();
+    if(gde) {
+        kprintf("[\x1b[91m-\x1b[0m] Failed initializing module manager\n");
         kpanic();
     } else {
-        kprintf("[\x1b[92m+\x1b[0m] Initialized gdevt\n");
+        kprintf("[\x1b[92m+\x1b[0m] Initialized module manager\n");
     }
 
-    initialize_pci();
+
     kprintf("[\x1b[92m+\x1b[0m] Initialized PCI\n");
 
-    // Harcode some drivers for testing
-    Driver DriverVGA        = { .name = "VGA.DRV",      .DriverEntry = VGA_DriverEntry, .data = (void*)(u32)0 };
-    Driver DriverI8042      = { .name = "I8042.DRV",    .DriverEntry = I8042_DriverEntry, .DriverInt = I8042_DriverInt };
-    Driver DriverATA_PIO    = { .name = "ATA.DRV",      .DriverEntry = ATA_DriverEntry, .DriverInt = ATA_DriverInt };
-    Driver DriverPCI        = { .name = "PCI.DRV",      .DriverEntry = PCI_DriverEntry };
+    // Driver DriverVGA        = { .name = "VGA.DRV",      .DriverEntry = VGA_DriverEntry, .data = (void*)(u32)0 };
+    // Driver DriverI8042      = { .name = "I8042.DRV",    .DriverEntry = I8042_DriverEntry, .DriverInt = I8042_DriverInt };
+    // Driver DriverATA_PIO    = { .name = "ATA.DRV",      .DriverEntry = ATA_DriverEntry, .DriverInt = ATA_DriverInt };
+    // Driver DriverPCI        = { .name = "PCI.DRV",      .DriverEntry = PCI_DriverEntry };
 
-    PCIDriver uhci  = get_uhci_driver();
-    PCIDriver ehci  = get_ehci_driver();
-    PCIDriver ac97  = get_ac97_driver();
-    PCIDriver i8254 = get_i8254_driver();
-    PCIDriver nvme  = get_nvme_driver();
+    module_t vga    = get_vga_module();
+    module_t i8042  = get_i8042_module();
+    module_t ata    = get_ata_module();
 
-    PCI_ADD(&uhci);
-    PCI_ADD(&ehci);
-    PCI_ADD(&ac97);
-    PCI_ADD(&i8254);
-    PCI_ADD(&nvme);
+    module_t uhci   = get_uhci_module();
+    module_t ehci   = get_ehci_module();
+    module_t ac97   = get_ac97_module();
+    module_t i8254  = get_i8254_module();
+    module_t nvme   = get_nvme_module();
 
-    load_driver(&DriverVGA);
-    load_driver(&DriverI8042);
-    load_driver(&DriverATA_PIO);
-    load_driver(&DriverPCI); // This is a wrapper that automatically loads registered PCI drivers
+    open_module(&vga);
+    open_module(&i8042);
+    // open_module(&ata);
+    // open_module(&uhci);
+    // open_module(&ehci);
+    // open_module(&ac97);
+    // open_module(&i8254);
+    // open_module(&nvme);
 
-    Device *fb = fb_get(RESOLUTION);
-    if(fb == NULL) {
-        kprintf("No available framebuffers...\n");
-    } else if(fb->data == NULL) {
-        kprintf("Framebuffer data is NULL!\n");
+    int stdout  = open("/dev/console");
+    int stdin   = open("/dev/kbd");
+
+    if(stdout == -1) {
+        kprintf("Failed to open \"/dev/console\"!\n");
+        kpanic();
     }
 
-    if(!((u32)DriverI8042.data & 0b10000000)) {
+    if(stdin == -1) {
+        kprintf("Failed to open \"/dev/kbd\"!\n");
+        kpanic();
+    }
+
+    if(!((u32)i8042.data & 0b10000000)) {
         kprintf("Failed to initialize PS/2 keyboard and mouse :(\n");
     }
 
@@ -102,7 +111,7 @@ void _start(multiboot_info_t *mbd, unsigned int magic) {
     kprintf("Memory available: %u MB\n", ((u32)(total_mem & 0xFFFFFFFF))/(1024*1024)+1);
     kprintf("GaOS v0.1 (built with gcc v" __VERSION__ ")\n");
 
-    if(shell_main(0))
+    if(shell_main(mbd))
         kpanic();
 
     while(1);

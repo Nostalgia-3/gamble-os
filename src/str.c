@@ -117,6 +117,13 @@ char* strtok(char *str, char del) {
     return str_storage;
 }
 
+const char *get_last_del(const char *st, char del) {
+    size_t index = 0;
+    for(int i=0;i<strlen(st);i++) {
+        if(st[i] == del) index = i;
+    }
+    return st+index+1;
+}
 
 void strcpy(u8* dest, u8* src) {
     for(size_t i=0;i<strlen(src);i++) {

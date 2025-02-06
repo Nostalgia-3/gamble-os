@@ -1,5 +1,7 @@
 [bits 32]
 
+section .text
+
 extern exception_handler
 extern irq_handler
 
@@ -114,9 +116,3 @@ isr_stub_table:
     dd isr_stub_%+i
 %assign i i+1
 %endrep
-
-global divbyzero
-divbyzero:
-    mov ebx, 0
-    div ebx
-    ret

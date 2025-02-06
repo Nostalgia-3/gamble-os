@@ -4,8 +4,10 @@
 #include <drivers/pci.h>
 #include <gosh/gosh.h>
 
-PCIDriver get_nvme_driver();
-int NVME_DriverEntry(Device *dev);
-void NVME_DriverInt(Device *dev, u8 intr);
+module_t get_nvme_module();
+
+// PCIDriver get_nvme_driver();
+// int NVME_DriverEntry(Device *dev);
+// void NVME_DriverInt(Device *dev, u8 intr);
 
 #endif

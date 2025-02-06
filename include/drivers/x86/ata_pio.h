@@ -3,7 +3,9 @@
 
 #include <gosh/gosh.h>
 
-int ATA_DriverEntry(Device *dev);
-void ATA_DriverInt(Device *dev, u8 int_id);
+module_t get_ata_module();
+
+// int ATA_DriverEntry(Device *dev);
+// void ATA_DriverInt(Device *dev, u8 int_id);
 
 #endif

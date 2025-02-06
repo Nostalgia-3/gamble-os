@@ -6,9 +6,6 @@
 #include <port.h>
 #include <types.h>
 
-Device* gdevt;
-u32 gdevt_len = 0;
-
 static u32 d_id = 0;
 
 /************************************ MISC ************************************/
@@ -95,7 +92,7 @@ void putc_dbg(u8 c) {
 #include <gosh/pipe.h>
 void puts_dbg(const char *st) {
     in_ansi = FALSE; ab = 0; memset(ansi, 0, sizeof(ansi));
-    write(STDOUT, (void*)st, strlen((char*)st));
+    write(DBGOUT, (void*)st, strlen((char*)st));
     // do {
     //     putc_dbg(*st);
     //     st++;
@@ -157,182 +154,37 @@ __attribute__((noreturn)) void kpanic() {
 }
 
 /********************************** KEYBOARD **********************************/
-
-void pushc(u8 c) {
-    if(c == 0) return;
-    Device* dev = k_get_device_by_owner(KERNEL_ID, DEV_KEYBOARD);
-    if(dev == NULL) kpanic();
-
-    KeyboardDeviceData* data = (KeyboardDeviceData*) dev->data;
-    if(data == NULL) kpanic();
-
-    if(data->fifo_ind > sizeof(data->fifo)) kpanic();
-    data->fifo[data->fifo_ind++] = c;
-}
-
-// Halt the process until a character from the keyboard is detected
-u8 scanc() {
-    u8 k;
-    do { k = getc(); } while(k == 0);
-    return k;
-}
-
-// Get the latest ascii key pressed, or 0 if there was no key
-u8 getc() {
-    Device* dev = k_get_device_by_owner(KERNEL_ID, DEV_KEYBOARD);
-    if(dev == NULL) return 0;
-
-    KeyboardDeviceData* data = (KeyboardDeviceData*) dev->data;
-    u8 k = data->fifo[0];
-    if(k == 0) return 0;
-
-    memcpy(data->fifo, data->fifo+1, sizeof(data->fifo)-1);
-    if(data->fifo_ind != 0) data->fifo_ind--;
-    return k;
-}
-
 /*********************************** DEVICE ***********************************/
-
-int _init_gdevt() {
-    if(gdevt != NULL) return 0;
-    gdevt_len = 128;
-    gdevt = k_malloc(sizeof(Device)*gdevt_len);
-    if(gdevt == NULL) return GDEVT_FAILED_ALLOC;
-    memset((void*)gdevt, 0, sizeof(Device)*gdevt_len);
-    for(int i=0;i<gdevt_len;i++)
-        gdevt[i].is_active = FALSE;
-
-    // standard keyboard output
-    Device *kbd = k_add_dev(KERNEL_ID, DEV_KEYBOARD, 0);
-    if(kbd == NULL) {
-        return GDEVT_FAILED_KBD;
-    }
-
-    return 0;
-}
-
-Device* get_gdevt() {
-    return gdevt;
-}
-
-u32 get_gdevt_len() {
-    return gdevt_len;
-}
-
-u32 get_used_devices() {
-    u32 total = 0;
-    for(int i=0;i<gdevt_len;i++) {
-        if(gdevt[i].id != 0) total++;
-    }
-    return total;
-}
-
-Device* k_add_dev(u32 kid, enum DeviceType dev, u32 code) {
-    u32 id = 0;
-    u32 ind = 0;
-
-    for(size_t i=0;i<gdevt_len;i++) {
-        if(gdevt[i].id == 0) {
-            id = ++d_id;
-            ind = i;
-            break;
-        }
-    }
-
-    // no free devices
-    if(id == 0) {
-        puts_dbg("No free devices left!\n");
-        return NULL;
-    }
-
-    memset(&gdevt[ind], 0, sizeof(Device));
-
-    switch(dev) {
-        case DEV_KEYBOARD:
-            gdevt[ind].data = k_malloc(sizeof(KeyboardDeviceData));
-            if(gdevt[ind].data == NULL) return NULL;
-            memset(gdevt[ind].data, 0, sizeof(KeyboardDeviceData));
-        break;
-
-        case DEV_DRIVER:
-            // This is defined in k_load_driver() as the pointer to the driver
-            gdevt[ind].data = NULL;
-        break;
-
-        case DEV_DRIVE:
-            gdevt[ind].data = k_malloc(sizeof(DriveDeviceData));
-            if(gdevt[ind].data == NULL) return NULL;
-            memset(gdevt[ind].data, 0, sizeof(DriveDeviceData));
-        break;
-
-        case DEV_FRAMEBUFFER:
-            gdevt[ind].data = k_malloc(sizeof(FBDeviceData));
-            if(gdevt[ind].data == NULL) return NULL;
-            memset(gdevt[ind].data, 0, sizeof(FBDeviceData));
-        break;
-
-        case DEV_MOUSE:
-            gdevt[ind].data = k_malloc(sizeof(MouseDeviceData));
-            if(gdevt[ind].data == NULL) return NULL;
-            memset(gdevt[ind].data, 0, sizeof(MouseDeviceData));
-        break;
-
-        default:
-            kprintf("Device type #%u not handled yet\n", dev);
-            return NULL;
-        break;
-    }
-
-    gdevt[ind].id = id;
-    gdevt[ind].code = code;
-    gdevt[ind].type = dev;
-    gdevt[ind].owner = kid;
-    gdevt[ind].is_active = TRUE;
-
-    return &gdevt[ind];
-}
-
-Device* k_get_device_by_owner(u32 owner, enum DeviceType type) {
-    for(u32 i=0;i<gdevt_len;i++) {
-        if(gdevt[i].owner == owner && (type == DEV_UNKNOWN || gdevt[i].type == type)) return &gdevt[i];
-    }
-
-    return NULL;
-}
-
-Device* k_get_device_by_id(u32 id, enum DeviceType type) {
-    for(u32 i=0;i<gdevt_len;i++) {
-        if(i == id && (type == DEV_UNKNOWN || gdevt[i].type == type)) return &gdevt[i];
-    }
-
-    return NULL;
-}
-
-Device* k_get_device_by_type(enum DeviceType type) {
-    for(u32 i=0;i<gdevt_len;i++) {
-        if(gdevt[i].type == type) return &gdevt[i];
-    }
-
-    return NULL;
-}
-
 /*********************************** DRIVER ***********************************/
 
-int load_driver(Driver *driver) {
-    if(driver == NULL) return 0;
+#define MAX_MODULES 128
 
-    char *name = driver->name;
-    if(name == NULL) name = "Unknown";
-    kprintf("[\x1b[92m+\x1b[0m] Loaded driver \"%s\"\n", name);
+static module_t *mods[MAX_MODULES];
+static bool module_manager_loaded = false;
 
-    Device *dev = k_add_dev(KERNEL_ID, DEV_DRIVER, 0);
-    if(dev == NULL) return 0;
-    driver->r_id = dev->id;
-    dev->data = driver;
-    if(driver->DriverEntry != NULL) {
-        return driver->DriverEntry(dev);
-    }
+int _setup_module_manager() {
+    if(module_manager_loaded) return -1;
+    module_manager_loaded = true;
+    memset(mods, 0, sizeof(mods));    
     return 0;
+}
+
+int open_module(module_t* module) {
+    if(module == NULL) return -1;
+
+    for(int i=0;i<MAX_MODULES;i++) {
+        if(mods[i] != NULL) continue;
+
+        mods[i] = module;
+        char *name = (char*)module->name;
+        if(name == NULL) name = "Unknown";
+        // kprintf("Loaded module \"%s\"\n", name);
+
+        if(module->module_start) module->module_start(module);
+        return 0;
+    }
+
+    kprintf("Failed loading module \"%s\"!\n", module->name);
 }
 
 /************************************ INTS ************************************/
@@ -341,28 +193,27 @@ void k_handle_int(u8 int_id) {
     u16 ind = int_id/8;
     u16 bit = int_id % 8;
 
-    for(u32 i=0;i<gdevt_len;i++) {
-        if(gdevt[i].type == DEV_DRIVER) {
-            Driver* driver = (Driver*)gdevt[i].data;
-            
-            if(driver == NULL) {
-                // this shouldn't happen, but it does
-                continue;
-            }
+    for(u32 i=0;i<MAX_MODULES;i++) {
+        if(mods[i] != NULL) {
+            module_t* mod = mods[i];
 
-            u8 j = driver->r_active_ints[ind];
-            if(j & (1<<bit) && driver->DriverInt != NULL)
-                driver->DriverInt(&gdevt[i], int_id);
+            u8 j = mod->r_active_ints[ind];
+            if(j & (1<<bit) && mod->module_int != NULL)
+                mod->module_int(mods[i], int_id);
         }
     }
 }
 
-bool k_register_int(Driver *driver, u8 int_id) {
-    if(driver == NULL) return FALSE;
+int k_register_int(module_t *mod, u8 int_id) {
+    if(mod == NULL) return false;
+    mod->r_active_ints[(u8)(int_id/8)] |= (1 << (int_id%8));
+    return true;
+}
 
-    driver->r_active_ints[(u8)(int_id/8)] |= (1 << (int_id%8));
-
-    return TRUE;
+int k_unregister_int(module_t *mod, u8 int_id) {
+    if(mod == NULL) return false;
+    mod->r_active_ints[(u8)(int_id/8)] &= ~(1 << (int_id%8));
+    return true;
 }
 
 /************************************ PCIE ************************************/
@@ -629,183 +480,6 @@ char font8x8_basic[128][8] = {
 #define draw_index_pixel(buf, x, y, w, col) *(u8*)((buf)+(x)+((y)*w)) = (col)
 #define draw_plane_pixel(buf, x, y, w, col) if((col) == 0) *(u8*)((buf)+((x) + (y)*(w))) |= (col); else *(u8*)((buf)+((x) + (y)*(w))) &= ~(col);
 
-bool fb_is_available() {
-    for(u32 i=0;i<gdevt_len;i++) {
-        if(gdevt[i].type == DEV_FRAMEBUFFER) return TRUE;
-    }
-
-    return FALSE;
-}
-
-/** @todo Make FBPreference do something  */
-Device* fb_get(enum FBPreference pref) {
-    for(u32 i=0;i<gdevt_len;i++) {
-        if(gdevt[i].type == DEV_FRAMEBUFFER) return &gdevt[i];
-    }
-
-    return NULL;
-}
-
-FBInfo fb_get_info(Device *fb) {
-    return *(FBInfo*)fb->data;
-}
-
-// Draw a single pixel at (x, y) with the best available match for the color
-// sent
-void fb_draw_pixel(Device *fb, u16 x, u16 y, u32 color) {
-    if(fb == NULL) return; // invalid fb
-
-    FBInfo* info = (FBInfo*)fb->data;
-    if(info == NULL) return;
-
-    if(x > info->w || y > info->h) return;
-
-    // no pixels on text :(
-    if(info->format == PixelFormat_TEXT_640x480) return;
-
-    if(info->format == PixelFormat_LINEAR_I8) {
-        *(u8*)(info->buffer + x+y*info->w) = (u8)color;
-    } else if(info->format == PixelFormat_PLANAR_I4) {
-        u16 bit = x%8;
-        u16 byte = ((x-bit)+y*640)/8;
-
-        outb(0x3C4, 2); // mask register
-        if(color == 0)
-            outb(0x3C5, 0b1111);
-        else
-            outb(0x3C5, (color) | 1);
-
-        *(u8*)(info->buffer + ((x)+y*info->w)/8) |= (1) << (8-(x%8+1));
-    }
-
-    if(info->buf_update) info->buf_update();
-}
-
-void fb_draw_rect(Device* fb, u16 x, u16 y, u16 w, u16 h, u32 color) {
-    if(fb == NULL) return; // invalid fb
-
-    FBInfo* info = (FBInfo*)fb->data;
-    if(info == NULL) return;
-
-    // no pixels on text :(
-    if(info->format == PixelFormat_TEXT_640x480) return;
-
-    if(info->format == PixelFormat_LINEAR_I8) {
-        for(u16 iy=0;iy<h;iy++) {
-            for(u16 ix=0;ix<w;ix++) {
-                *(u8*)((info->buffer)+(ix+x)+((iy+y)*info->w)) = (color);
-            }
-        }
-    } else if(info->format == PixelFormat_PLANAR_I4) {
-        outb(0x3C4, 2); // mask register
-        if(color == 0)
-            outb(0x3C5, 0b1111);
-        else
-            outb(0x3C5, color); // + 0x0FFFF
-
-        for(u16 iy=0;iy<h;iy++) {
-            for(u16 ix=0;ix<w;ix++) {
-                u8 bit = (1) << (8-((x+ix)%8+1));
-                u32 byte = ((x+ix)+(y+iy)*info->w)/8;
-
-                if(color)
-                    *(u8*)(info->buffer + (byte)) |= bit;
-                else
-                    *(u8*)(info->buffer + (byte)) &= ~bit;
-            }
-        }
-    }
-
-    if(info->buf_update) info->buf_update();
-}
-
-void fb_draw_char(Device *fb, u16 x, u16 y, u8 c, u32 color) {
-    if(fb == NULL) return;
-    
-    FBInfo* info = (FBInfo*)fb->data;
-    if(info == NULL) return;
-
-    if(info->format == PixelFormat_TEXT_640x480) {
-        // this is harcoded to be 8x8 glyphs
-        // *(u8*)(0xB8000) = '?';
-        if(c != '\n') {
-            *(u8*)(info->buffer+((x+y*info->w)/8)*2) = c;
-            *(u8*)(info->buffer+((x+y*info->w)/8)*2+1) = (u8)color;
-        }
-    } else if(info->format == PixelFormat_LINEAR_I8) {
-        for(u16 iy=0;iy<8;iy++) {
-            for(u16 ix=0;ix<8;ix++) {
-                if(font8x8_basic[c][iy] & (1 << ix))
-                    *(u8*)((info->buffer)+(ix+x)+((iy+y)*info->w)) = (color);
-            }
-        }
-    } else if(info->format == PixelFormat_PLANAR_I4) {
-        outb(0x3C4, 2); // mask register
-        if(color == 0)
-            outb(0x3C5, 0b1111);
-        else
-            outb(0x3C5, color | 1);
-
-        for(u16 iy=0;iy<8;iy++) {
-            for(u16 ix=0;ix<8;ix++) {
-                if(font8x8_basic[c][iy] & (1 << ix))
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8) |= (1) << (8-((x+ix)%8+1));
-                else
-                    *(u8*)(info->buffer + ((x+ix)+(y+iy)*info->w)/8) &= ~(1 << (8-((x+ix)%8+1)));
-            }
-        }
-    }
-}
-
-void fb_clear(Device *fb, u32 color) {
-    if(fb == NULL) return; // invalid fb
-
-    FBInfo* info = (FBInfo*)fb->data;
-    if(info == NULL) return;
-
-    if(info->format == PixelFormat_LINEAR_I8) {
-        for(int i=0;i<info->w*info->h;i++) {
-            *(u8*)(info->buffer+i) = (u8)color;
-        }
-    } else if(info->format == PixelFormat_PLANAR_I4) {
-        outb(0x3C4, 2); // mask register
-        if(color == 0)
-            outb(0x3C5, 0b1111);
-        else
-            outb(0x3C5, color | 1);
-
-        for(u16 iy=0;iy<info->h;iy++) {
-            for(u16 ix=0;ix<info->w;ix++) {
-                if(color)
-                    *(u8*)(info->buffer + (((ix)+(iy)*info->w)/8) + 0x00000) = 0xFF;
-                else
-                    *(u8*)(info->buffer + (((ix)+(iy)*info->w)/8) + 0x00000) = 0x00;
-            }
-        }
-    } else if(info->format == PixelFormat_TEXT_640x480) {
-        for(u16 i=0;i<info->w*info->h;i++) {
-            *(u8*)(info->buffer + i*2) = 0x00;
-            *(u8*)(info->buffer + i*2+1) = 0x0F;
-        }
-    }
-
-    if(info->buf_update) info->buf_update();
-}
-
-/****************************** VIRTUAL TERMINAL ******************************/
-
-// Device *stdvt() {
-//     return k_get_device_by_owner(KERNEL_ID, DEV_VIRT_TERM);
-// }
-
-void putcnoup(u8 key) {
-    write(STDOUT, &key, 1);
-}
-
-void putsnoup(u8 *st) {
-    write(STDOUT, st, strlen(st));
-}
-
 char* __int_str(u32 i, char b[], int base, bool plusSignIfNeeded, bool spaceSignIfNeeded,
                 int paddingNo, bool justify, bool zeroPad) {
     
@@ -868,6 +542,10 @@ char* __int_str(u32 i, char b[], int base, bool plusSignIfNeeded, bool spaceSign
     }
     
     return b;
+}
+
+void putc(char c) {
+    write(DBGOUT, &c, 1);
 }
 
 void v_kprintf(const char *format, va_list list) {
@@ -972,7 +650,7 @@ void v_kprintf(const char *format, va_list list) {
                 specifier = 'u';
                 if (altForm) {
                     u8 s = '0';
-                    write(STDOUT, &s, 1);
+                    write(DBGOUT, &s, 1);
                 }
             }
             if (specifier == 'p') {
@@ -986,7 +664,7 @@ void v_kprintf(const char *format, va_list list) {
                 case 'x':
                     base = base == 10 ? 17 : base;
                     if (altForm) {
-                        write(STDOUT, "0x", 2);
+                        write(DBGOUT, "0x", 2);
                     }
                     
                 case 'u':
@@ -996,56 +674,56 @@ void v_kprintf(const char *format, va_list list) {
                         {
                             unsigned int integer = va_arg(list, unsigned int);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                            write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'H':
                         {
                             unsigned char integer = (unsigned char) va_arg(list, unsigned int);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                            write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'h':
                         {
                             unsigned short int integer = va_arg(list, unsigned int);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                            write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'l':
                         {
                             unsigned long integer = va_arg(list, unsigned long);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                            write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'q':
                         {
                             unsigned long long integer = va_arg(list, unsigned long long);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                            write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'j':
                         {
                             u32 integer = va_arg(list, u32);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                            write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 'z':
                         {
                             size_t integer = va_arg(list, size_t);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                            write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         case 't':
                         {
                             ptrdiff_t integer = va_arg(list, ptrdiff_t);
                             __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                            write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                            write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                             break;
                         }
                         default:
@@ -1062,56 +740,56 @@ void v_kprintf(const char *format, va_list list) {
                     {
                         int integer = va_arg(list, int);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                        write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'H':
                     {
                         signed char integer = (signed char) va_arg(list, int);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                        write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'h':
                     {
                         short int integer = va_arg(list, int);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                        write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'l':
                     {
                         long integer = va_arg(list, long);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                        write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'q':
                     {
                         long long integer = va_arg(list, long long);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                        write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'j':
                     {
                         u32 integer = va_arg(list, u32);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                        write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 'z':
                     {
                         size_t integer = va_arg(list, size_t);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                        write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     case 't':
                     {
                         ptrdiff_t integer = va_arg(list, ptrdiff_t);
                         __int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify, zeroPad);
-                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                        write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                         break;
                     }
                     default:
@@ -1123,9 +801,9 @@ void v_kprintf(const char *format, va_list list) {
                 case 'c':
                 {
                     if (length == 'l') {
-                        putcnoup(va_arg(list, wint_t));
+                        putc(va_arg(list, wint_t));
                     } else {
-                        putcnoup(va_arg(list, int));
+                        putc(va_arg(list, int));
                     }
                     
                     break;
@@ -1134,7 +812,7 @@ void v_kprintf(const char *format, va_list list) {
                 case 's':
                 {
                     char *st = va_arg(list, char*);
-                    write(STDOUT, st, strlen(st));
+                    write(DBGOUT, st, strlen(st));
                     break;
                 }
                     
@@ -1202,7 +880,7 @@ void v_kprintf(const char *format, va_list list) {
                     __int_str(floating, intStrBuffer, base, plusSign, spaceNoSign, form, \
                               leftJustify, zeroPad);
                     
-                    write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                    write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                     
                     floating -= (int) floating;
                     
@@ -1212,12 +890,12 @@ void v_kprintf(const char *format, va_list list) {
                     u32 decPlaces = (u32) (floating + 0.5);
                     
                     if (precSpec) {
-                        putcnoup('.');
+                        putc('.');
                         __int_str(decPlaces, intStrBuffer, 10, FALSE, FALSE, 0, FALSE, FALSE);
                         intStrBuffer[precSpec] = 0;
-                        write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                        write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
                     } else if (altForm) {
-                        putcnoup('.');
+                        putc('.');
                     }
                     
                     break;
@@ -1234,26 +912,20 @@ void v_kprintf(const char *format, va_list list) {
             }
             
             if (specifier == 'e') {
-                putsnoup("e+");
+                write(DBGOUT, "e+", 2);
             } else if (specifier == 'E') {
-                putsnoup("E+");
+                write(DBGOUT, "E+", 2);
             }
             
             if (specifier == 'e' || specifier == 'E') {
                 __int_str(expo, intStrBuffer, 10, FALSE, FALSE, 2, FALSE, TRUE);
-                write(STDOUT, intStrBuffer, strlen(intStrBuffer));
+                write(DBGOUT, intStrBuffer, strlen(intStrBuffer));
             }
             
         } else {
-            write(STDOUT, (char*)format+i, 1);
+            write(DBGOUT, (char*)format+i, 1);
         }
     }
-}
-
-void update(Device *vt) {
-    if(vt == NULL) return;
-    if(((VTDeviceData*)vt->data)->write_handler)
-        ((VTDeviceData*)vt->data)->write_handler(vt);
 }
 
 __attribute__ ((format (printf, 1, 2))) void kprintf(const char* format, ...) {
@@ -1266,26 +938,6 @@ __attribute__ ((format (printf, 1, 2))) void kprintf(const char* format, ...) {
 }
 
 /*********************************** DRIVES ***********************************/
-
-// Read a sector from a drive drive, and write it to data
-bool read_sector(Device *drive, u32 sector, u8* data) {
-    if(drive != NULL || !drive->is_active || drive->type != DEV_DRIVE) return FALSE;
-    
-    DriveDeviceData* d = (DriveDeviceData*)drive->data;
-
-    if(d->read_sector)
-        d->read_sector(drive, sector, data);
-}
-
-bool write_sector(Device *drive, u32 sector, u8* data) {
-    if(drive != NULL || !drive->is_active || drive->type != DEV_DRIVE) return FALSE;
-    
-    DriveDeviceData* d = (DriveDeviceData*)drive->data;
-
-    if(d->write_sector)
-        d->write_sector(drive, sector, data);
-}
-
 /***************************** VIRTUAL FILESYSTEM *****************************/
 
 typedef struct _BPB {
@@ -1321,55 +973,3 @@ typedef struct _BPB {
     u8 bootcode[420];       // Ignore data here
     u16 bootable_signature; // 0xAA55
 } BPB;
-
-typedef i32 fd_t;
-typedef i64 off_t;
-
-fd_t create_st() {
-
-}
-
-bool mount_drive(Device *drive, char* path) {
-    if(drive == NULL || !drive->is_active || drive->type != DEV_DRIVE) return FALSE;
-
-    DriveDeviceData* d = (DriveDeviceData*)drive->data;
-    if(d == NULL || !d->read_sector) return FALSE;
-
-    kprintf("sizeof(BPB) = %u\n", sizeof(BPB));
-
-    // I'm hardcoding FAT32 at the only partition on the drive
-    BPB * bpb = (BPB *)k_malloc(d->sector_size);
-    if(bpb == NULL) return FALSE;
-    d->read_sector(drive, 0, (u8*)bpb);
-
-    if(bpb->jmp[0] != 0xEB || bpb->jmp[2] != 0x90) goto fail;
-    if(bpb->total_secs != 0) goto fail;
-
-    write(STDOUT, bpb->oem, 8);
-
-    // kprintf("sector count: %u\n", bpb->large_sec_count);
-    write(STDOUT, bpb->volume_label, 11);
-    kprintf("\n");
-
-    k_free(bpb);
-    return TRUE;
-fail:
-    k_free(bpb);
-    return FALSE;
-}
-
-// Open a file at a specified path, returning the file descriptor, or an error
-// if it failed to open
-fd_t open(char* path) {
-
-}
-
-// Read count bytes from fd at offset to buf
-int pread(fd_t fd, void *buf, size_t count, off_t offset) {
-
-}
-
-// Write count bytes to fd at offset from buf
-int pwrite(fd_t fd, void *buf, size_t count, off_t offset) {
-
-}

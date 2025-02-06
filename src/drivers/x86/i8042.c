@@ -133,7 +133,7 @@ int i8042_send_cont_comm(u8 byte) {
 
 unsigned char enlower_scan1[128] = {
     0,   0,   '1', '2',  '3', '4', '5', '6', '7', '8', '9', '0',
-    '-', '=', '\b','\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i',
+    '-', '=', '\b','\0', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i',
     'o', 'p', '[', ']', '\n', 0,   'a', 's', 'd', 'f', 'g', 'h',
     'j', 'k', 'l', ';', '\'', '`', 0,   '\\','z', 'x', 'c', 'v',
     'b', 'n', 'm', ',', '.', '/', 0,    '*', 0, ' ', 0, 0, 0, 0,
@@ -143,7 +143,7 @@ unsigned char enlower_scan1[128] = {
 
 unsigned char enshift_scan1[128] = {
     0,   0,   '!', '@',  '#', '$', '%', '^', '&', '*', '(', ')',
-    '_', '+', '\b','\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I',
+    '_', '+', '\b','\0', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I',
     'O', 'P', '{', '}', '\n', 0,   'A', 'S', 'D', 'F', 'G', 'H',
     'J', 'K', 'L', ':', '"', '~', 0,   '|', 'Z', 'X', 'C', 'V',
     'B', 'N', 'M', '<', '>', '?', 0,    '*', 0, ' ', 0, 0, 0, 0,
@@ -192,13 +192,46 @@ int ack_second_ps2(u8 byte) {
     if(!timeout) return 1;
 }
 
-static u8 mouse_step = 0;
-static Device* mouse_dev;
+static device_t kbd;
+static u8   fifo[256];
+static u32  fifo_ind;
+static bool ready_to_push_line;
+
+ssize_t i8042_kbd_read(void* buf, size_t len, off_t *offset) {
+    if(len == 0) return 0;
+    if(fifo_ind == 0) return 0;
+
+    if(len > fifo_ind) {
+        size_t d = fifo_ind;
+        memcpy(buf, fifo, fifo_ind);
+        memset(fifo, 0, fifo_ind);
+        fifo_ind = 0;
+        return d;
+    } else {
+        memcpy(buf, fifo, len);
+        fifo_ind -= len;
+        // memcpy(fifo, fifo+fifo_ind, sizeof(fifo)-fifo_ind);
+        return len;
+    }
+}
+
+void pushc(char c) {
+    if(fifo_ind > sizeof(fifo)) return;
+    if(c == '\0') return;
+    fifo[fifo_ind++] = c;
+    if(c == '\n') ready_to_push_line = true;
+}
 
 // @TODO handle device B
-int I8042_DriverEntry(Device *dev) {
-    Driver* driver = (Driver*)dev->data;
-    driver->data = 0b00;
+int i8042_entry(module_t *dev) {
+    dev->data = 0;
+    memset(fifo, 0, sizeof(fifo));
+    fifo_ind = 0;
+
+    kbd = (device_t) {
+        .owner = dev->id,
+        .read = i8042_kbd_read
+    };
 
     bool dual = FALSE;
     bool device_a = TRUE;
@@ -263,16 +296,20 @@ int I8042_DriverEntry(Device *dev) {
         io_wait();
 
         if((device&0xFF) == 0xAB) {
-            Device* kbd = k_add_dev(dev->id, DEV_KEYBOARD, device);
+            int de = register_device("/dev/kbd", &kbd);
+            // Device* kbd = k_add_dev(dev->id, DEV_KEYBOARD, device);
 
             // Failed to add a device
-            if(kbd == NULL) {
-                kprintf("Failed to add the PS/2 keyboard to the gdevt\n");
+            if(de < 0) {
+                kprintf("Failed to create a keyboard device!\n");
                 return DRIVER_FAILED;
             }
 
-            k_register_int((Driver*)dev->data, 0x21);
-            if(device_a) driver->data = (u32*)((u32)driver->data | KBD_LOADED);
+            if(!k_register_int(dev, 0x21)) {
+                kprintf("Failed to register interrupt for PS/2 keyboard!\n");
+                return DRIVER_FAILED;
+            };
+            if(device_a) dev->data = (u32*)((u32)dev->data | KBD_LOADED);
             
             i8042_send_ack(0xF4); // enable scanning
             
@@ -284,15 +321,6 @@ int I8042_DriverEntry(Device *dev) {
             kprintf("Unknown PS/2 Device: 0x%X\n", device);
             // device_a = FALSE;
         }
-    }
-    
-    if(device_a) {
-        k_register_int((Driver*)dev->data, 0x21);
-        driver->data = (u32*)((u32)driver->data | KBD_LOADED);
-        
-        i8042_send_ack(0xF4); // enable scanning
-        conf.first_ps2_int = 1; // enable interrupts
-        conf.first_ps2_trans = 1;
     }
 
     i8042_set_config(conf);
@@ -306,11 +334,12 @@ void reset_cpu() {
     outb(0x64, COM_RESET_CPU); // reset the cpu
 }
 
-void I8042_DriverInt(Device *dev, u8 int_id) {
-    Driver* driver = (Driver*)dev->data;
-    u32 x = (u32)driver->data; // bitfield
+int i8042_int(module_t *dev, u8 irq) {
+    // Driver* driver = (Driver*)dev->data;
+    u32 x = (u32)dev->data; // bitfield
 
-    if(int_id == 0x21) { // KBD
+
+    if(irq == 0x21) { // KBD
         u8 scan = inb(0x60);
 
         if(x & KBD_IGNORE) {
@@ -341,29 +370,16 @@ void I8042_DriverInt(Device *dev, u8 int_id) {
             }
         }
 
-        driver->data = (void*)x;
-    } else if(int_id == 0x2C) {
-        u8 b = inb(0x60);
-
-        switch(mouse_step) {
-            case 0: // data bit
-                kprintf("mdata = %02X\n", b);
-            break;
-
-            case 1: // relative X
-            break;
-
-            case 2: // relative Y
-            break;
-        }
-
-        mouse_step++;
-
-        if(mouse_step == 3) {
-            // parse the data packet and update the device
-            mouse_step = 0;
-            if(mouse_dev == NULL) return;
-
-        }
+        dev->data = (void*)x;
     }
+
+    return 0;
+}
+
+module_t get_i8042_module() {
+    return (module_t) {
+        .name = "i8042",
+        .module_start = i8042_entry,
+        .module_int = i8042_int
+    };
 }

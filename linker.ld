@@ -1,14 +1,31 @@
 ENTRY(_load)
 /* OUTPUT_FORMAT(binary) */
 OUTPUT_FORMAT(elf32-i386)
-/* STARTUP(build/a_kernel-entry.asm.o) */
+
+STARTUP(build/a_kernel-entry.asm.o)
 
 SECTIONS
 {
-  . = 0x01000000; /*2M;*/
-  .text BLOCK(4K) : ALIGN(4K)
+	. = 0x01000000;
+
+	.entry.text BLOCK(4K) : ALIGN(4K)
 	{
 		*(.multiboot)
+		*(.entry.text)
+	}
+
+	.entry.data BLOCK(4K) : ALIGN(4K)
+	{
+		*(.entry.data)
+	}
+
+	.entry.rodata BLOCK(4K) : ALIGN(4K)
+	{
+		*(.entry.rodata)
+	}
+
+	.text BLOCK(4K) : ALIGN(4K)
+	{
 		*(.text)
 	}
 
