@@ -19,7 +19,8 @@ module_t get_rtl8139_driver() {
             .device     = 0x100E,
             .class      = 0xFF,
             .subclass   = 0xFF,
-            .interface  = 0xFF
+            .interface  = 0xFF,
+            .search = true
         }
     };
 }

@@ -15,7 +15,7 @@ void strcpy(u8* dest, u8* src);
 void strcat(u8* dest, u8* src);
 
 // Convert an int to ascii
-char* itoa(int val, int base);
+char* itoa(u32 val, int base);
 // Convert an ascii base-10 number to an int
 u32 atoi(char*);
 // Convert an ascii base-16 number to an int

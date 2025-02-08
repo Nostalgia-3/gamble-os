@@ -5,13 +5,6 @@
 #include <str.h>
 
 #define MAX_DESCRIPTORS 128
-
-// typedef struct _fd_e_t {
-//     u8 in_use;
-//     dt_t type;
-//     void *v;
-// } fd_e_t;
-
 static inode_t* open_descriptors[MAX_DESCRIPTORS];
 
 static inode_t *inodes;
@@ -300,7 +293,13 @@ ssize_t read(fd_t fd, void *buf, size_t len) {
     switch(open_descriptors[fd]->type) {
         case DT_DEV: {
             device_t *d = open_descriptors[fd]->resource;
+            if(d->read == NULL) return 0;
             return d->read(buf, len, &d->off);
+        break; }
+
+        default: {
+            // can't read these types of inodes :guh:
+            return -1;
         break; }
     }
 }
@@ -321,6 +320,16 @@ ssize_t pwrite(fd_t fd, void *buf, size_t count, off_t offset) {
 
 // Manipulate an open file descriptor
 int ioctl(int fd, int op, void *data) {
+    if(fd >= MAX_DESCRIPTORS) return -1;
+    
+    // descriptor doesn't exist
+    if(open_descriptors[fd] == NULL) return -1;
+
+    if(open_descriptors[fd]->type == DT_DEV) {
+        device_t* dev = (device_t*)open_descriptors[fd]->resource;
+        if(dev->ioctl) dev->ioctl(fd, op, data);
+    }
+
     return 0;
 }
 

@@ -286,7 +286,7 @@ void handle_recv() {
         u8 *buf = (u8*)(u32) rx_descs[rx_cur]->addr;
         u16 len = rx_descs[rx_cur]->length;
 
-        kprintf("buf addr = 0x%X, len = %u\n", buf, len);
+        kprintf("buf addr = 0x%X, len = %u\n", (u32)buf, len);
 
         rx_descs[rx_cur]->status = 0;
         old_cur = rx_cur;
@@ -322,15 +322,17 @@ bool send_packet(void *p_data, u16 p_len) {
 }
 
 int i8254_start(module_t *mod) {
+    return 0;
+    
     u8 bus  = mod->pci_flags.r_bus;
-    u8 slot = mod->pci_flags.r_bus;
+    u8 slot = mod->pci_flags.r_slot;
 
     GenPCIHeader header = pci_get_gen_header(bus, slot);
 
     pci_set_comm(PCI_IO_SPACE | PCI_MEM_SPACE | PCI_BUS_MASTER, bus, slot);
 
-    // bar_type = header.bar[0] & 1;
-    bar_type = 1;
+    // bar_type = 1;
+    bar_type = header.bar[0] & 1;
     mem_base = (header.bar[0] & (~3));
     for(int i=0;i<5;i++) {
         if(header.bar[i+1] & 1) {
@@ -353,6 +355,8 @@ int i8254_start(module_t *mod) {
     txinit();
     
     kprintf("%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    return 0;
 
     // Send a DHCP Discover packet
     u8 *packet = k_malloc(342);
@@ -433,7 +437,8 @@ module_t get_i8254_module() {
             .device = 0x100E,
             .class  = 0xFF,
             .subclass = 0xFF,
-            .interface = 0xFF
+            .interface = 0xFF,
+            .search = true
         }
     };
 }

@@ -30,31 +30,27 @@ void syscall_handler() {
 }
 
 void _start(multiboot_info_t *mbd, unsigned int magic) {
+    // This is for the framebuffer; passing this is (imo) cheating,
+    // and I should find a better way to make this work
+    set_vga_mbd(mbd);
+
     idt_init();
-    kprintf("[\x1b[92m+\x1b[0m] Initialized IDT\n");
+    kprintf("Initialized interrupt table\n");
 
     init_mem();
-    kprintf("[\x1b[92m+\x1b[0m] Initialized memory\n");
+    kprintf("Initialized kernel memory allocation\n");
 
     _setup_device_manager();
     int gde = _setup_module_manager();
     _init_vfs();
     if(gde) {
-        kprintf("[\x1b[91m-\x1b[0m] Failed initializing module manager\n");
+        kprintf("Failed creating module manager\n");
         kpanic();
     } else {
-        kprintf("[\x1b[92m+\x1b[0m] Initialized module manager\n");
+        kprintf("Module manager created\n");
     }
 
-
-    kprintf("[\x1b[92m+\x1b[0m] Initialized PCI\n");
-
-    // Driver DriverVGA        = { .name = "VGA.DRV",      .DriverEntry = VGA_DriverEntry, .data = (void*)(u32)0 };
-    // Driver DriverI8042      = { .name = "I8042.DRV",    .DriverEntry = I8042_DriverEntry, .DriverInt = I8042_DriverInt };
-    // Driver DriverATA_PIO    = { .name = "ATA.DRV",      .DriverEntry = ATA_DriverEntry, .DriverInt = ATA_DriverInt };
-    // Driver DriverPCI        = { .name = "PCI.DRV",      .DriverEntry = PCI_DriverEntry };
-
-    module_t vga    = get_vga_module();
+    module_t vga    = get_vga_module(mbd);
     module_t i8042  = get_i8042_module();
     module_t ata    = get_ata_module();
 
@@ -66,12 +62,13 @@ void _start(multiboot_info_t *mbd, unsigned int magic) {
 
     open_module(&vga);
     open_module(&i8042);
-    // open_module(&ata);
-    // open_module(&uhci);
-    // open_module(&ehci);
-    // open_module(&ac97);
-    // open_module(&i8254);
-    // open_module(&nvme);
+    open_module(&ata);
+
+    open_module(&uhci);
+    open_module(&ehci);
+    open_module(&ac97);
+    open_module(&i8254);
+    open_module(&nvme);
 
     int stdout  = open("/dev/console");
     int stdin   = open("/dev/kbd");
@@ -100,7 +97,10 @@ void _start(multiboot_info_t *mbd, unsigned int magic) {
         }
     }
 
-    if(total_mem > 0xFFFFFFFF) total_mem = 0xFFFFFFFF;
+    if(total_mem > 0xFFFFFFFF) {
+        kprintf("(memory larger than 4GiB, so truncating to 4GiB)\n");
+        total_mem = 0xFFFFFFFF;
+    }
 
     kprintf("Memory available: %u MB\n", ((u32)(total_mem & 0xFFFFFFFF))/(1024*1024)+1);
     kprintf("GaOS v0.1 (built with gcc v" __VERSION__ ")\n");

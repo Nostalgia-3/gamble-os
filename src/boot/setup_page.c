@@ -29,9 +29,11 @@ extern void boot_setup_paging() {
         kernel_page_dir[i] = (uint32_t)kernel_page_tables[i] | PAGE_PRESENT | PAGE_READWRITE;
     }
 
-    // for(int i=0;i<1024;i++) {
-    //     kernel_page_dir[i] = (uint32_t) (i*PAGE_SIZE & 0xFFC00000) | PAGE_PRESENT | PAGE_READWRITE | PAGE_SIZE_4MIB;
-    // }
+    // Make it so page exceptions occur on reading/writing from 0x0000 to 0x1000
+    kernel_page_tables[0][0] = 0;
 
+    // kernel_page_dir[i] = (uint32_t) (i*PAGE_SIZE & 0xFFC00000) | PAGE_PRESENT | PAGE_READWRITE | PAGE_SIZE_4MIB;
+
+    // Bare minimum debugging
     *(uint8_t*)0xB8004 = 'P';
 }

@@ -2,8 +2,8 @@
 #include "memory.h"
 #include "str.h"
 
-char* itoa(int val, int base) {
-    int tval = val;
+char* itoa(u32 val, int base) {
+    u32 tval = val;
     static char buf[32] = {0};
     
     if(tval == 0) {

@@ -19,31 +19,34 @@ _load:
     lgdt [gdt_descriptor]   ; setup the GDT
     jmp CODE_SEG:_newgdt
 _newgdt:
-    call boot_setup_paging
-    mov eax, kernel_page_dir
-    mov cr3, eax
-    mov eax, cr4
-    or eax, 0x00000010
-    mov cr4, eax
-    mov eax, cr0
-    or eax, 0x80000001
-    mov cr0, eax
+    ; do paging in the future
+    ; call boot_setup_paging
+    ; mov eax, kernel_page_dir
+    ; mov cr3, eax
+    ; mov eax, cr4
+    ; or eax, 0x00000010
+    ; mov cr4, eax
+    ; mov eax, cr0
+    ; or eax, 0x80000001
+    ; mov cr0, eax
 
     call _start             ; jump to the kernel _start function
     jmp $                   ; and if it ever returns, halt
 
-section .entry.data
+section .bss
 
 extern kernel_page_dir
 extern kernel_page_tables
 
+; some ~256KiB of hardcoded data
+
 align 4096
 kernel_page_dir:
-    times 1024 dd 0
+    times 1024 resb 4
 
 align 4096
 kernel_page_tables:
-    times 64*1024 dd 0
+    times 64*1024 resb 4
 
 section .entry.rodata
 
@@ -72,7 +75,7 @@ gdt_descriptor:
 CODE_SEG equ gdt_code - gdt_start
 DATA_SEG equ gdt_data - gdt_start
 
-FLAGS       equ 0b11; | (1 << 16)
+FLAGS       equ 0b11 | (1 << 2) ; | (1 << 16)
 MAGIC       equ 0x1BADB002
 CHECKSUM    equ -(MAGIC + FLAGS)
 
@@ -82,8 +85,14 @@ align 4
 dd MAGIC
 dd FLAGS
 dd CHECKSUM
-dd 0x01000000 ; header load location
-dd 0x01000000 ; data load location
-dd 0          ; data length (0 = the entire file)
-dd 0          ; bss end (0 = none)
-dd _load
+dd 0x01000000   ; header load location
+dd 0x01000000   ; data load location
+dd 0            ; data length (0 = the entire file)
+dd 0            ; bss end (0 = none)
+dd _load        ; entry
+dd 1            ; video type            (text mode)
+dd 0            ; width of framebuffer  (no preference)
+dd 0            ; height of framebuffer (no preference)
+dd 32           ; depth of framebuffer  (32 bpp)
+
+; 640 480

@@ -24,7 +24,8 @@ module_t get_ehci_module() {
             .subclass = 0x03,
             .interface = 0x20,
             .device = 0xFFFF,
-            .vendor = 0xFFFF
+            .vendor = 0xFFFF,
+            .search = true
         }
     };
 }

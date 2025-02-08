@@ -160,6 +160,7 @@ module_t get_ac97_module() {
             .class  = 0x04,
             .subclass = 0x01,
             .interface = 0xFF,
+            .search = true
         }
     };
 }

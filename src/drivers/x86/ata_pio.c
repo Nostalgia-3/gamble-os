@@ -1,6 +1,8 @@
+#include <drivers/x86/ata_pio.h>
 #include <gosh/gosh.h>
 #include <port.h>
-#include "drivers/x86/ata_pio.h"
+#include <str.h>
+#include <memory.h>
 
 // This driver is going to be REALLY mediocre, but for the bare minimum, idrc
 #define IO_BASE1            0x1F0
@@ -302,74 +304,54 @@ void ATAPIO_write_sector(device_t *dev, u32 sector, u8 *addr) {
     return;
 }
 
-#include <str.h>
-#include <memory.h>
-int ata_entry(module_t *dev) {
-    kprintf("ATA\n");
-    // if(inb(IO_BASE1 + IO_STATUS_REG) == 0xFF) {
-    //     kprintf("Warning: IO bus #1 has no drives\n");
-    // } else {
-    //     ATADevice d1 = detect_devtype(IO_BASE1, 0);
-    //     ATADevice d2 = detect_devtype(IO_BASE1, 1);
-    //     if(d1.exists && d1.size > 0) {
-    //         // create a drive device
-    //         Device *dev = k_add_dev(d->id, DEV_DRIVE, 0x00);
-    //         if(dev == NULL) return DRIVER_FAILED;
-    //         DriveDeviceData *data = dev->data;
-    //         if(data == NULL) return DRIVER_FAILED;
-    //         data->read_sector = ATAPIO_read_sector;
-    //         data->write_sector = ATAPIO_write_sector;
-    //         data->sectors = d1.size/512;
-    //         data->sector_size = 512;
-    //     }
+static device_t sda;
+static device_t sdb;
+static device_t sdc;
+static device_t sdd;
 
-    //     if(d2.exists && d2.size > 0) {
-    //         // create a drive device
-    //         Device *dev = k_add_dev(d->id, DEV_DRIVE, 0x01);
-    //         if(dev == NULL) return DRIVER_FAILED;
-    //         DriveDeviceData *data = dev->data;
-    //         if(data == NULL) return DRIVER_FAILED;
-    //         data->read_sector = ATAPIO_read_sector;
-    //         data->write_sector = ATAPIO_write_sector;
-    //         data->sectors = d2.size/512;
-    //         data->sector_size = 512;
-    //     }
+int ata_entry(module_t *mod) {
+    // data->read_sector = ATAPIO_read_sector;
+    // data->write_sector = ATAPIO_write_sector;
+    // data->sectors = d1.size/512;
+    // data->sector_size = 512;
+    if(inb(IO_BASE1 + IO_STATUS_REG) == 0xFF) {
+        kprintf("Warning: IO bus #1 has no drives\n");
+    } else {
+        ATADevice d1 = detect_devtype(IO_BASE1, 0);
+        ATADevice d2 = detect_devtype(IO_BASE1, 1);
+        if(d1.exists && d1.size > 0) {
+            // create a drive device
+            sda = (device_t) { 0 };
+            register_device("/dev/sda", &sda);
+        }
 
-    //     k_register_int((Driver*)d->data, IRQ_FIRST_BUS);
-    // }
+        if(d2.exists && d2.size > 0) {
+            // create a drive device
+            sdb = (device_t) { 0 };
+            register_device("/dev/sdb", &sdb);
+        }
 
-    // if(inb(IO_BASE2 + IO_STATUS_REG) == 0xFF) {
-    //     kprintf("Warning: IO bus #2 has no drives\n");
-    // } else {
-    //     ATADevice d3 = detect_devtype(IO_BASE2, 0);
-    //     ATADevice d4 = detect_devtype(IO_BASE2, 1);
+        k_register_int(mod, IRQ_FIRST_BUS);
+    }
 
-    //     if(d3.exists && d3.size > 0) {
-    //         // create a drive device
-    //         Device *dev = k_add_dev(d->id, DEV_DRIVE, 0x02);
-    //         if(dev == NULL) return DRIVER_FAILED;
-    //         DriveDeviceData *data = dev->data;
-    //         if(data == NULL) return DRIVER_FAILED;
-    //         data->read_sector = ATAPIO_read_sector;
-    //         data->write_sector = ATAPIO_write_sector;
-    //         data->sectors = d3.size/512;
-    //         data->sector_size = 512;
-    //     }
+    if(inb(IO_BASE2 + IO_STATUS_REG) != 0xFF) {
+        ATADevice d3 = detect_devtype(IO_BASE2, 0);
+        ATADevice d4 = detect_devtype(IO_BASE2, 1);
 
-    //     if(d4.exists && d4.size > 0) {
-    //         // create a drive device
-    //         Device *dev = k_add_dev(d->id, DEV_DRIVE, 0x03);
-    //         if(dev == NULL) return DRIVER_FAILED;
-    //         DriveDeviceData *data = dev->data;
-    //         if(data == NULL) return DRIVER_FAILED;
-    //         data->read_sector = ATAPIO_read_sector;
-    //         data->write_sector = ATAPIO_write_sector;
-    //         data->sectors = d4.size/512;
-    //         data->sector_size = 512;
-    //     }
+        if(d3.exists && d3.size > 0) {
+            // create a drive device
+            sdc = (device_t) { 0 };
+            register_device("/dev/sdc", &sdd);
+        }
 
-    //     k_register_int((Driver*)d->data, IRQ_SECOND_BUS);
-    // }
+        if(d4.exists && d4.size > 0) {
+            // create a drive device
+            sdd = (device_t) { 0 };
+            register_device("/dev/sdd", &sdd);
+        }
+
+        k_register_int(mod, IRQ_SECOND_BUS);
+    }
 
     return DRIVER_SUCCESS;
 }
@@ -380,7 +362,7 @@ int ata_int(module_t *dev, u8 int_id) {
 
 module_t get_ata_module() {
     return (module_t) {
-        .name = "ATA (PIO)",
+        .name = "ata_pio",
         .module_start = ata_entry,
         .module_int = ata_int
     };

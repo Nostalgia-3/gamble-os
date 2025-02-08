@@ -2,20 +2,23 @@
 #include <memory.h>
 #include <str.h>
 
-#define MAX_DEVICES 128
-static device_t *devs[MAX_DEVICES];
+#define MAX_DEVICES 256
+static device_t **devs;
 static bool dev_man_setup = false;
 
 void _setup_device_manager() {
     if(dev_man_setup) return;
 
+    devs = (device_t**)k_malloc(sizeof(device_t*) * MAX_DEVICES);
     if(devs == 0) return;
-    memset(devs, 0, sizeof(devs));
+    memset(devs, 0, sizeof(device_t*) * MAX_DEVICES);
     dev_man_setup = true;
 }
 
 // Create a device with the name and device, returning -1 if an error occured
 int register_device(const char *pathname, device_t *dev) {
+    if(dev == 0) return -1;
+    
     for(int i=0;i<MAX_DEVICES;i++) {
         if(devs[i] == 0) {
             devs[i] = dev;

@@ -11,7 +11,7 @@ void    wait(u32 ms);
 #define KERNEL_ID 0x8008
 
 // Output a debug character to the serial port
-void initialize_serial();
+int initialize_serial();
 void putc_dbg(u8 c);
 void puts_dbg(const char *st);
 // Stop writing debugging to stdout

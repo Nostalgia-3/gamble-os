@@ -19,6 +19,5 @@
 #include "net.h"
 #include "pcie.h"
 #include "system.h"
-#include "pipe.h"
 
 #endif

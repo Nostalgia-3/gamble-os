@@ -4,7 +4,11 @@
 #include <gosh/gosh.h>
 #include "types.h"
 
-module_t get_vga_module();
+#include <multiboot.h>
+
+void set_vga_mbd(multiboot_info_t *mbd);
+
+module_t get_vga_module(multiboot_info_t *mbd);
 
 // int VGA_DriverEntry(Device *dev);
 

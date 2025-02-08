@@ -6,7 +6,29 @@
 
 // static Driver driver = { .name = "NVME.DRV", .DriverEntry=NVME_DriverEntry, .DriverInt=NVME_DriverInt };
 
+static device_t nvme0;
+
+ssize_t nvme_write(const void *buf, size_t len, off_t *offset) {
+    kprintf("writing block %u\n", (*offset)/512);
+    return 0;
+}
+
+ssize_t nvme_read(void *buf, size_t len, off_t *offset) {
+    kprintf("reading block %u\n", (*offset)/512);
+
+    return 0;
+}
+
 int nvme_entry(module_t *mod) {
+    nvme0 = (device_t) {
+        .read = nvme_read,
+        .write = nvme_write,
+    };
+
+    if(register_device("/dev/nvme0", &nvme0) < 0) {
+        kprintf("Failed to create nvme device\n");
+    }
+
     return DRIVER_SUCCESS;
 }
 
@@ -24,7 +46,8 @@ module_t get_nvme_module() {
             .device = 0xFFFF,
             .class  = 0x01,
             .subclass = 0x08,
-            .interface = 0xFF
+            .interface = 0xFF,
+            .search = true
         }
     };
 }

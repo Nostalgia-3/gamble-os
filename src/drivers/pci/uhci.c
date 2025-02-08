@@ -38,7 +38,7 @@ int uhci_entry(module_t *mod) {
     u8 bus  = mod->pci_flags.r_bus;
     u8 slot = mod->pci_flags.r_slot;
 
-    kprintf("UCHI detected (pci bus = %u, pci slot = %u)\n", bus, slot);
+    // kprintf("UCHI detected (pci bus = %u, pci slot = %u)\n", bus, slot);
 
     return DRIVER_SUCCESS;
 }
@@ -57,7 +57,8 @@ module_t get_uhci_module() {
             .subclass = 0x03,
             .interface = 0x00,
             .device = 0xFFFF,
-            .vendor = 0xFFFF
+            .vendor = 0xFFFF,
+            .search = true
         }
     };
 }

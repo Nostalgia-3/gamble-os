@@ -60,6 +60,7 @@ static u16 HEIGHT   = 0;
 
 static u8 cur_color = 15;
 
+static char cwd[128];
 static u8 cmdbfr[80];
 static u8 ind = 0;
 
@@ -321,7 +322,7 @@ void run_command(multiboot_info_t *mbd) {
                 break;
 
                 case DT_DEV:
-                    kprintf("\x1b[93m\x1b[44m");
+                    kprintf("\x1b[32m");
                 break;
             }
             kprintf("%s\x1b[0m ", ent.d_name);

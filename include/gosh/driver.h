@@ -18,6 +18,9 @@ typedef struct _pci_flags_t {
     u8 r_bus;
     // The slot the PCI device is in; set by the module loader
     u8 r_slot;
+
+    // If true, the module loader uses the flags described in this struct
+    bool search;
 } pci_flags_t;
 
 typedef struct _module_t module_t;
@@ -25,14 +28,17 @@ typedef struct _module_t module_t;
 typedef struct _module_t {
     // Bitfield of active interrupts
     u8 r_active_ints[32];
+
     // The id of the module
     size_t id;
+
     // The name of the module
     const char *name;
+    
     // A value owned by the module
     void *data;
 
-    // PCI Flags (disable by setting .vendor = 0)
+    // PCI Flags (disable by setting .search = false)
     pci_flags_t pci_flags;
 
     // Called when the module is opened
