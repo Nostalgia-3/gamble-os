@@ -310,6 +310,7 @@ static device_t sdc;
 static device_t sdd;
 
 int ata_entry(module_t *mod) {
+    return DRIVER_SUCCESS;
     // data->read_sector = ATAPIO_read_sector;
     // data->write_sector = ATAPIO_write_sector;
     // data->sectors = d1.size/512;

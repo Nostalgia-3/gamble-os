@@ -5,7 +5,6 @@ I8254 - Network Card
 */
 
 #include <drivers/pci/i8254.h>
-#include <drivers/pci.h>
 #include <gosh/gosh.h>
 
 #include <port.h>

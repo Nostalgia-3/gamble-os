@@ -165,6 +165,7 @@ int open_module(module_t* module) {
         char *name = (char*)module->name;
         if(name == NULL) name = "Unknown";
         module->id = i;
+        kprintf("Loading module \"%s\"\n", name);
         if(module->module_start) module->module_start(module);
         return 0;
     }

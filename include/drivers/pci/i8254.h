@@ -2,7 +2,6 @@
 #define I8254_H
 
 #include <gosh/gosh.h>
-#include <drivers/pci.h>
 
 module_t get_i8254_module();
 

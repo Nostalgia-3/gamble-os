@@ -1,8 +1,6 @@
 #ifndef FONT_8x8
 #define FONT_8x8
 
-uint8_t CHAR_WIDTH  = 8;
-uint8_t CHAR_HEIGHT = 8;
 /**
  * 8x8 monochrome bitmap fonts for rendering
  * Author: Daniel Hepper <daniel@hepper.net>
@@ -22,6 +20,8 @@ uint8_t CHAR_HEIGHT = 8;
  *
  * Fetched from: http://dimensionalrift.homelinux.net/combuster/mos3/?p=viewsource&file=/modules/gfx/font8_8.asm
  **/
+uint8_t CHAR_WIDTH  = 8;
+uint8_t CHAR_HEIGHT = 8;
 char font[128][8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0000 (nul)
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0001

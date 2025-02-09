@@ -1,7 +1,6 @@
 #ifndef EHCI_H
 #define EHCI_H
 
-#include <drivers/pci.h>
 #include <gosh/gosh.h>
 
 module_t get_ehci_module();

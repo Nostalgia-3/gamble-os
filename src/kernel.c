@@ -10,7 +10,6 @@
 #include <drivers/x86/i8042.h>
 #include <drivers/x86/vga.h>
 
-#include <drivers/pci.h>
 #include <drivers/pci/i8254.h>
 #include <drivers/pci/ac97.h>
 #include <drivers/pci/uhci.h>

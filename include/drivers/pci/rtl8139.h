@@ -2,7 +2,6 @@
 #define RTL8139_H
 
 #include <gosh/gosh.h>
-#include <drivers/pci.h>
 
 module_t get_rtl8139_module();
 

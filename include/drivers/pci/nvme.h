@@ -1,7 +1,6 @@
 #ifndef NVME_H
 #define NVME_H
 
-#include <drivers/pci.h>
 #include <gosh/gosh.h>
 
 module_t get_nvme_module();

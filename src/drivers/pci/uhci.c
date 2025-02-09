@@ -1,5 +1,4 @@
 #include <drivers/pci/uhci.h>
-#include <drivers/pci.h>
 #include <gosh/gosh.h>
 
 #define CMD_RUN             (1<<0)

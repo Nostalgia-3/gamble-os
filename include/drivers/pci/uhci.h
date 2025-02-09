@@ -1,7 +1,6 @@
 #ifndef UHCI_H
 #define UHCI_H
 
-#include <drivers/pci.h>
 #include <gosh/gosh.h>
 
 module_t get_uhci_module();

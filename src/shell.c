@@ -56,27 +56,12 @@ const char* DEVTYPE_ST[] = {
 
 static u16 WIDTH    = 0;
 static u16 HEIGHT   = 0;
-
-
 static u8 cur_color = 15;
-
-static char cwd[128];
 static u8 cmdbfr[80];
 static u8 ind = 0;
-
-// static Device *fb;
-// static Device *vt;
-// static FBInfo info;
-
 static u8 running = TRUE;
-
 static u32 prevind = 0;
-
 static bool in_color = FALSE;
-
-void clear_screen() {
-    // kprintf("\x1b[2J");
-}
 
 #include <math.h>
 void hexdump(u8* addr, u32 size) {
@@ -114,6 +99,9 @@ void hexdump(u8* addr, u32 size) {
     kprintf("|");
 }
 
+void write_char(char c) {
+    cmdbfr[ind++] = c;
+}
 
 void run_command(multiboot_info_t *mbd) {
     u8* comm = strtok(cmdbfr, ' ');
@@ -338,13 +326,10 @@ void run_command(multiboot_info_t *mbd) {
 int shell_main(multiboot_info_t *mbd) {
     const char* prompt = "\x1b[94mShell\x1b[0m> ";
 
-    clear_screen();
-
     kprintf("-= \x1b[93mGaOs \x1b[94mShell\x1b[0m v1.0 =-\n");
     kprintf("%s\x1b[0m", prompt);
 
     bool extra = FALSE;
-
     u8 sc = '\0';
 
     while(running) {
@@ -352,14 +337,13 @@ int shell_main(multiboot_info_t *mbd) {
         if(b == 0 || sc == '\0') continue;
 
         if(extra) {
-            if (sc == 0x4B) {
-                // Left Arrow
-            } else if (sc == 0x4D) {
-                // Right Arrow
-            } else if (sc == 0x48) {
-                // Up Arrow
-            } else if (sc == 0x5C) {
-                // Down Arrow
+            kprintf("%X\n", sc);
+
+            switch(sc) {
+                case 0x4B: if(ind > 0) ind--; break; // left arrow
+                case 0x4D: if(ind < sizeof(cmdbfr)) ind++; break; // right arrow
+                case 0x48: break; // Up Arrow
+                case 0x5C: break; // Down Arrow
             }
 
             extra = FALSE;
@@ -375,20 +359,22 @@ int shell_main(multiboot_info_t *mbd) {
             } else if(sc == '\n') {
                 putc(sc);
                 run_command(mbd);
-                for(int x=0;x<ind;x++) cmdbfr[x] = 0;
+                memset(cmdbfr, 0, sizeof(cmdbfr));
                 ind = 0;
             } else {
                 if(ind > sizeof(cmdbfr)) continue;
-                cmdbfr[ind++] = sc;
+                write_char(sc);
             }
 
-            char *comr = strtok(cmdbfr, ' ');
-            char apple[80];
-            memset(apple, 0, 80);
-            for(int i=0;i<strlen(comr);i++) apple[i] = comr[i];
-            if(running) kprintf("\x1b[2K\r%s\x1b[93m%s\x1b[0m%s", prompt, apple, cmdbfr+strlen(comr)); // cmdbfr+strlen(st) \x1b[2K\r
+            if(running) {
+                // Fancy command highlighting
+                char *comr = strtok(cmdbfr, ' ');
+                char command[80];
+                memset(command, 0, 80);
+                for(int i=0;i<strlen(comr);i++) command[i] = comr[i];
+                kprintf("\x1b[2K\r%s\x1b[93m%s\x1b[0m%s", prompt, command, cmdbfr+strlen(comr));
+            }
         }
-
     }
 
     return 0;

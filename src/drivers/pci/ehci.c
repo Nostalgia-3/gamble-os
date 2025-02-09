@@ -1,6 +1,5 @@
-#include <drivers/pci/ehci.h>
-#include <drivers/pci.h>
 #include <gosh/gosh.h>
+#include <drivers/pci/ehci.h>
 
 int ehci_entry(module_t *mod) {
     u8 bus  = mod->pci_flags.r_bus;

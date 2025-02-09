@@ -1,7 +1,6 @@
 #ifndef AC97_H
 #define AC97_H
 
-#include <drivers/pci.h>
 #include <gosh/gosh.h>
 
 module_t get_ac97_module();
