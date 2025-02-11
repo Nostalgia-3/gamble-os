@@ -46,7 +46,7 @@ int vga_entry(module_t *dev) {
     };
 
     // Add a framebuffer device
-    int suc = register_device("/dev/console", &out);
+    int suc = register_device("console", &out);
     if(suc < 0) {
         kprintf("Failed to create console device!\n");
         return DRIVER_FAILED;
@@ -73,8 +73,8 @@ void vga_set_cursor(u16 x, u16 y) {
 }
 
 void vga_scroll_down() {
-    // u32 line_width = (80*2);
     if(type == MULTIBOOT_FRAMEBUFFER_TYPE_EGA_TEXT) {
+        u32 line_width = (80*2);
         for(u32 i=0;i<25;i++) {
             memcpy((u8*)0xB8000+line_width*i, (u8*)0xB8000+line_width*(i+1), line_width);
         }

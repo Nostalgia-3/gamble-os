@@ -6,6 +6,8 @@
 #include <memory.h>
 #include <math.h>
 
+#include <cpuid.h>
+
 #include <port.h>
 
 #include <drivers/x86/vga.h>
@@ -328,6 +330,14 @@ int shell_main(multiboot_info_t *mbd) {
 
     kprintf("-= \x1b[93mGaOs \x1b[94mShell\x1b[0m v1.0 =-\n");
     kprintf("%s\x1b[0m", prompt);
+
+    int ebx, ecx, edx, unused;
+    __cpuid(0, unused, ebx, edx, ecx);
+
+    kprintf("%c%c%c%c", ebx & 0xFF, (ebx >> 8) & 0xFF, (ebx >> 16) & 0xFF, (ebx >> 24) & 0xFF);
+    kprintf("%c%c%c%c", ecx & 0xFF, (ecx >> 8) & 0xFF, (ecx >> 16) & 0xFF, (ecx >> 24) & 0xFF);
+    kprintf("%c%c%c%c", edx & 0xFF, (edx >> 8) & 0xFF, (edx >> 16) & 0xFF, (edx >> 24) & 0xFF);
+    putc('\n');
 
     bool extra = FALSE;
     u8 sc = '\0';

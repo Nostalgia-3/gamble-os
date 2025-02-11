@@ -61,13 +61,13 @@ void _start(multiboot_info_t *mbd, unsigned int magic) {
 
     open_module(&vga);
     open_module(&i8042);
-    open_module(&ata);
+    // open_module(&ata);
 
-    open_module(&uhci);
-    open_module(&ehci);
-    open_module(&ac97);
-    open_module(&i8254);
-    open_module(&nvme);
+    // open_module(&uhci);
+    // open_module(&ehci);
+    // open_module(&ac97);
+    // open_module(&i8254);
+    // open_module(&nvme);
 
     int stdout  = open("/dev/console");
     int stdin   = open("/dev/kbd");

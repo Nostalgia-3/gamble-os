@@ -17,7 +17,6 @@ const LINKER_SCRIPT     = 'linker.ld';
 
 // -Wall
 const CFLAGS            = `-O2 -s -m32 -fno-pie -nostdlib -ffreestanding`;
-
 const INCLUDE           = 'include';
 
 yargs(Deno.args)
@@ -58,8 +57,9 @@ yargs(Deno.args)
         default: 'nasm'
     })
     .option('efi', {
+        alias: ['uefi', 'u'],
         type: 'boolean',
-        description: 'Specify whether to include EFI programs',
+        description: 'Specify whether to include Grub builds for (U)EFI',
         default: false
     })
     .option('verbose', {
@@ -118,10 +118,7 @@ function emulate(pargs: Record<string, unknown>) {
         '-device usb-storage,bus=ehci.0,drive=stick',
 
         // RAM
-        `-m 1G`,
-
-        // Debugging
-        // `-d int,cpu_reset`
+        `-m 1G`
     ];
 
     if(pargs.exip == undefined) {
@@ -178,7 +175,6 @@ function build(pargs: Record<string, unknown>) {
     m.dirExist('build/iso/EFI/BOOT', pargs.efi as boolean ?? false);
     if(pargs.efi) {
         m.assert(m.copyFile('resources/BOOTX64.EFI', 'build/iso/EFI/BOOT/BOOTX64.EFI'), `Failed to find "resources/BOOTX64.EFI"`);
-        m.assert(m.copyFile('resources/BOOTIA386.EFI', 'build/iso/EFI/BOOT/BOOTIA386.EFI'), `Failed to find "resources/BOOTXIA386.EFI"`);
     } else {
         m.removeDir('build/iso/EFI');
     }

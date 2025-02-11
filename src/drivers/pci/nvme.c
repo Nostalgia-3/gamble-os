@@ -25,7 +25,7 @@ int nvme_entry(module_t *mod) {
         .write = nvme_write,
     };
 
-    if(register_device("/dev/nvme0", &nvme0) < 0) {
+    if(register_device("nvme0", &nvme0) < 0) {
         kprintf("Failed to create nvme device\n");
     }
 

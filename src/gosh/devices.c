@@ -16,15 +16,15 @@ void _setup_device_manager() {
 }
 
 // Create a device with the name and device, returning -1 if an error occured
-int register_device(const char *pathname, device_t *dev) {
+int register_device(const char *name, device_t *dev) {
     if(dev == 0) return -1;
     
     for(int i=0;i<MAX_DEVICES;i++) {
         if(devs[i] == 0) {
             devs[i] = dev;
-            devs[i]->name = pathname;
+            devs[i]->name = name;
 
-            return mknod(pathname, DT_DEV, devs[i]);
+            return mknod(name, "/dev/", DT_DEV, devs[i]);
         }
     }
 

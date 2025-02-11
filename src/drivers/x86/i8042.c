@@ -230,6 +230,7 @@ static device_t mouse;
 static u8   fifo[256];
 static u32  fifo_ind;
 static bool ready_to_push_line;
+static u8   mouse_index = 0;
 
 ssize_t i8042_kbd_read(void* buf, size_t len, off_t *offset) {
     if(len == 0) return 0;
@@ -254,46 +255,6 @@ void i8042_pushc(char c) {
     if(c == '\0') return;
     fifo[fifo_ind++] = c;
     if(c == '\n') ready_to_push_line = true;
-}
-
-int setup_port(module_t *dev, u8 type) {
-    switch(type) {
-        case 0xAB: {
-            if(register_device("/dev/kbd", &kbd) < 0 && register_device("/dev/kbd1", &kbd) < 0) {
-                kprintf("Failed to create keyboard device! (step=3)\n");
-                return -1;
-            }
-
-            if(!k_register_int(dev, 0x21)) {
-                kprintf("Failed to register interrupt 0x21 (step=3)\n");
-                return -1;
-            }
-
-            i8042_ack_port1(0xF4);
-
-            return PORT_KEYBOARD;
-        break; }
-
-        case 0x00: {
-            if(register_device("/dev/mouse", &mouse) < 0 && register_device("/dev/mouse1", &kbd) < 0) {
-                kprintf("Failed to create mouse device! (step=3, port=0)\n");
-                return -1;
-            }
-
-            if(!k_register_int(dev, 0x21)) {
-                kprintf("Failed to register interrupt 0x21 (step=3)\n");
-                return -1;
-            }
-
-            i8042_ack_port1(0xF4);
-
-            return PORT_MOUSE;
-        break; }
-
-        default:
-            kprintf("Unknown device (step=3, 0x%X)\n", type);
-        break;
-    }
 }
 
 u8 handle_keyboard(u8 scan, u8 x) {
@@ -327,7 +288,42 @@ u8 handle_keyboard(u8 scan, u8 x) {
     return x;
 }
 
+static u8 mouse_ctrl = 0;
+static i16 rel_x = 0;
+static i16 rel_y = 0;
+
+static i16 mouse_x = 0;
+static i16 mouse_y = 0;
+
 u8 handle_mouse(u8 byte, u8 x) {
+    switch(mouse_index) {
+        case 0:
+            mouse_ctrl = byte;
+            mouse_index++;
+        break;
+
+        case 1:
+            rel_x = byte;
+            mouse_index++;
+        break;
+
+        case 2:
+            rel_y = byte;
+            if(mouse_ctrl & (1<<4)) { rel_x = -rel_x; }
+            if(mouse_ctrl & (1<<5)) { rel_y = -rel_y; }
+            if(mouse_ctrl & (1<<6)) { rel_x |= (1<<8); }
+            if(mouse_ctrl & (1<<7)) { rel_y |= (1<<8); }
+
+            mouse_x += rel_x;
+            mouse_y += rel_y;
+
+            if(mouse_x < 0) mouse_x = 0;
+            if(mouse_y < 0) mouse_y = 0;
+
+            mouse_index = 0;
+        break;
+    }
+
     return x;
 }
 
@@ -363,7 +359,7 @@ int i8042_entry(module_t *dev) {
 
     i8042_ack_port1(0xF4);
     kprintf("%X ", i8042_get_byte());
-    i8042_ack_port2(0xF4);
+    i8042_ack_port2(0xF4); // disable scanning for second port
     kprintf("%X\n", i8042_get_byte());
 
     conf = i8042_get_config();
@@ -375,118 +371,39 @@ int i8042_entry(module_t *dev) {
         kprintf("Failed to set i8042 config (enabling interrupts)!\n");
     }
 
-    if(register_device("/dev/kbd", &kbd) < 0) {
+    if(register_device("kbd", &kbd) < 0) {
+        kprintf("Failed creating keyboard!\n");
+        return DRIVER_FAILED;
+    }
+
+    if(register_device("mouse", &mouse) < 0) {
         kprintf("Failed creating keyboard!\n");
         return DRIVER_FAILED;
     }
 
     if(!k_register_int(dev, 0x21)) {
-        kprintf("Failed to register interrupt\n");
+        kprintf("Failed to register keyboard interrupt\n");
+        return DRIVER_FAILED;
+    }
+
+    if(!k_register_int(dev, 0x2C)) {
+        kprintf("Failed to register mouse interrupt\n");
         return DRIVER_FAILED;
     }
 
     return DRIVER_SUCCESS;
-
-    // // Setup the first PS/2 slot
-    // conf.first_ps2_int      = 0;
-    // conf.first_ps2_trans    = 1;
-    // conf.first_ps2_clock    = 1;
-
-    // // Setup the second PS/2 slot
-    // conf.second_ps2_int     = 0;
-    // conf.second_ps2_clock   = 1;
-
-    // if(i8042_set_config(conf)) {
-    //     kprintf("Failed to set i8042 config! (step=0)\n");
-    //     return DRIVER_FAILED;
-    // }
-
-    // // TODO: Test for second PS/2
-    
-    // // Disable scanning on both ports
-    // i8042_ack_port1(0xF5);
-    // i8042_ack_port2(0xF5);
-
-    // i8042_send_command(COM_TEST_FIRST_PS2);
-    // u8 resp = i8042_get_byte();
-    // if(resp != 0x00) {
-    //     kprintf("I8042 port #1 test failed (step=1, expected 0x00 but got 0x%02X)\n", resp);
-    //     slot_a[0] = false;
-    //     return DRIVER_FAILED;
-    // }
-
-    // i8042_flush();
-
-    // conf = i8042_get_config();
-    // if(conf._failed) {
-    //     kprintf("Failed to get i8042 config! (step=3)\n");
-    //     return DRIVER_FAILED;
-    // }
-
-    // u8 info     = 0;
-    // u16 timeout = 2400;
-
-    // i8042_ack_port1(0xF2); // Identify
-    // while(info == 0x00 && timeout != 0) {
-    //     info = i8042_get_byte();
-    //     timeout--;
-    // }
-
-    // port1_type = setup_port(dev, info);
-
-    // if(port1_type == DRIVER_FAILED) {
-    //     kprintf("Failed to setup PS/2 port #1\n");
-    //     // return DRIVER_FAILED;
-    // }
-
-    // i8042_flush();
-    // i8042_ack_port2(0xF2); // Identify
-    // info = 0; timeout = 0;
-    // while(info == 0x00 && timeout != 0) {
-    //     info = i8042_get_byte();
-    //     timeout--;
-    // }
-
-    // port2_type = setup_port(dev, info);
-
-    // if(port2_type == -1) {
-    //     kprintf("Failed to setup PS/2 port #2\n");
-    // }
-
-    // conf.first_ps2_int = 1;
-    // conf.second_ps2_int = 1;
-
-    // if(i8042_set_config(conf)) {
-    //     kprintf("Failed to set i8042 config! (step=3)\n");
-    //     return DRIVER_FAILED;
-    // }
-
-
-    // return DRIVER_SUCCESS;
 }
-
-// port1_type
 
 int i8042_int(module_t *dev, u8 irq) {
     u32 x = (u32)dev->data; // bitfield
 
     if(irq == 0x21) { // port #1
         u8 byte = inb(0x60);
-        if(port1_type == PORT_MOUSE) {
-            x = handle_mouse(byte, x);
-        } else if(port1_type == PORT_KEYBOARD) {
-            x = handle_keyboard(byte, x);
-        }
-
+        x = handle_keyboard(byte, x);
         dev->data = (void*)x;
     } else if(irq == 0x2C) { // port #2
         u8 byte = inb(0x60);
-        if(port2_type == PORT_MOUSE) {
-            x = handle_mouse(byte, x);
-        } else if(port2_type == PORT_KEYBOARD) {
-            x = handle_keyboard(byte, x);
-        }
-
+        x = handle_mouse(byte, x);
         dev->data = (void*)x;
     }
 

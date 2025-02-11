@@ -24,7 +24,10 @@ typedef struct _file_t {
     // TODO: Fill in information about the file
 } file_t;
 
+typedef struct _inode_t inode_t;
+
 typedef struct _inode_t {
+    inode_t *parent;
     // The name of the inode
     const char *name;
     // The type of the resource
@@ -52,7 +55,7 @@ int _init_vfs();
 // Close a file based on the file descriptor
 void close(fd_t fd);
 
-int mknod(const char *pathname, dt_t type, void *resource);
+int mknod(const char* name, const char *path, dt_t type, void *resource);
 
 /// Open an inode returning the file descriptor, or -1 if not found
 int open(const char *pathname);

@@ -7,16 +7,48 @@
 #define MAX_DESCRIPTORS 128
 static inode_t* open_descriptors[MAX_DESCRIPTORS];
 
+static inode_t *root_inode;
 static inode_t *inodes;
 static u32 inode_count;
 
-directory_t *create_directory() {
+inode_t* get_free_inode() {
+    for(int i=0;i<inode_count;i++) {
+        if(!inodes[i].in_use) return &inodes[i];
+    }
+}
+
+// Allocate an inode from inodes, filling it with directory information
+// before returning it
+inode_t *create_directory(const char *name) {
     directory_t *d = k_malloc(sizeof(directory_t));
     memset(d, 0, sizeof(directory_t));
     d->children = k_malloc(sizeof(inode_t*)*256);
     memset(d->children, 0, sizeof(inode_t*)*256);
     d->children_count = 256;
-    return d;
+    inode_t *inode = get_free_inode();
+    inode->name = name;
+    inode->type = DT_DIR;
+    inode->resource = d;
+    inode->in_use = true;
+    return inode;
+}
+
+int add_child(inode_t *parent_dir, inode_t* child) {
+    if(parent_dir == NULL || child == NULL) return -1;
+    if(!parent_dir->in_use) return -1;
+    if(parent_dir->type != DT_DIR) return -1;
+
+    directory_t* dir = (directory_t*)parent_dir->resource;
+
+    for(int i=0;i<dir->children_count;i++) {
+        if(dir->children[i] == NULL) {
+            child->parent = parent_dir;
+            dir->children[i] = child;
+            return 0;
+        }
+    }
+
+    return -1;
 }
 
 int _init_vfs() {
@@ -28,44 +60,37 @@ int _init_vfs() {
     if(inodes == NULL) return -1;
     memset(inodes, 0, sizeof(inode_t)*inode_count);
 
-    directory_t* rootdir    = create_directory();
-    directory_t* devdir     = create_directory();
+    inode_t* rootdir    = create_directory("/");
+    rootdir->parent     = NULL;
 
-    inodes[0].name      = "/";
-    inodes[0].type      = DT_DIR;
-    inodes[0].resource  = rootdir;
-    inodes[0].in_use    = true;
-    inodes[1].name      = "dev";
-    inodes[1].type      = DT_DIR;
-    inodes[1].resource  = devdir;
-    inodes[1].in_use    = true;
+    inode_t* devdir     = create_directory("dev");
+    inode_t* infodir    = create_directory("info");
 
-    rootdir->children[0] = &inodes[1];
+    root_inode = rootdir;
+
+    if(add_child(rootdir, devdir) < 0) {
+        kprintf("/!\\ Failed creating /dev/\n");
+    }
+    
+    if(add_child(rootdir, infodir) < 0) {
+        kprintf("/!\\ Failed creating /info/\n");
+    }
 
     return 0;
 }
 
-inode_t* get_free_inode() {
-    for(int i=0;i<inode_count;i++) {
-        if(!inodes[i].in_use) return &inodes[i];
-    }
-}
-
-int mknod(const char *pathname, dt_t type, void *resource) {
+inode_t *get_inode_from_path(const char *pathname) {
     if(strlen((char*)pathname) == 0) {
-        kprintf("");
-        return -1;
+        return NULL;
     }
 
     inode_t *inode;
 
     if(pathname[0] == '/') {
-        // kprintf("absolute path\n");
-        inode = &inodes[0];
+        inode = root_inode;
     } else {
-        // kprintf("relative path\n");
         // TODO: use the processes curdir once processes are setup
-        inode = &inodes[0];
+        inode = root_inode;
     }
 
     char cpath[128] = {0};
@@ -77,116 +102,14 @@ int mknod(const char *pathname, dt_t type, void *resource) {
             case '/':
                 if(i != 0) {
                     if(inode == NULL || inode->type != DT_DIR) {
-                        // kprintf("inode is either null or not a directory\n");
-                        return -1;
-                    }
-
-                    directory_t *dir = ((directory_t*)inode->resource);
-                    if(dir->children_count == 0) {
-                        // kprintf("Directory \"%s\" has no children slots!\n", inode->name);
-                        return -1;
-                    }
-
-                    bool found = false;
-                    for(int x=0;x<dir->children_count;x++) {
-                        if(dir->children[x] != NULL) {
-                            if(strcmp((char*)dir->children[x]->name, cpath) == 0) {
-                                found = true;
-                                inode = dir->children[x];
-                                memset(cpath, 0, cpath_ind);
-                                cpath_ind = 0;
-                                break;
-                            }
-                        }
-                    }
-
-                    if(!found) {
-                        // kprintf("Failed to find inode with name \"%s\"\n", cpath);
-                        return -1;
-                    }
-                }
-            break;
-
-            default:
-                cpath[cpath_ind++] = pathname[i];
-            break;
-        }
-    }
-
-    if(strlen(cpath) == 0) {
-        // was given a directory instead of a file
-        // kprintf("cannot create a directory node \"%s\"\n", pathname);
-        return -1;
-    }
-
-    if(inode == NULL || inode->type != DT_DIR) {
-        // kprintf("inode is either null or not a directory\n");
-        return -1;
-    }
-
-    directory_t *dir = ((directory_t*)inode->resource);
-    if(dir->children_count == 0) {
-        // kprintf("Directory \"%s\" doesn't have any free children!\n", inode->name);
-        return -1;
-    }
-
-    for(int x=0;x<dir->children_count;x++) {
-        if(dir->children[x] != NULL) {
-            if(strcmp((char*)dir->children[x]->name, cpath) == 0) {
-                // kprintf("Node \"%s\" already exists!", cpath);
-                return -1;
-            }
-        }
-    }
-
-    
-    for(int x=0;x<dir->children_count;x++) {
-        if(dir->children[x] == NULL) {
-            inode_t *node = get_free_inode();
-            node->in_use = true;
-            node->name = get_last_del(pathname, '/');
-            node->type = type;
-            node->resource = resource;
-            dir->children[x] = node;
-            return 0;
-        }
-    }
-
-    return -1;
-}
-
-/// @brief Open a file/device/pipe
-/// @param path The path to the file/device/pipe
-/// @return returning the file descriptor (or -1 if not found)
-fd_t open(const char *path) {
-    // invalid path
-    if(strlen((char*)path) == 0) return -1;
-
-    inode_t *inode;
-
-    if(path[0] == '/') {
-        inode = &inodes[0];
-    } else {
-        // TODO: use the processes curdir once processes are setup
-        inode = &inodes[0];
-    }
-
-    char cpath[128] = {0};
-    memset(cpath, 0, sizeof(cpath));
-    int cpath_ind = 0;
-
-    for(int i=0;i<strlen((char*)path);i++) {
-        switch(path[i]) {
-            case '/':
-                if(i != 0) {
-                    if(inode == NULL || inode->type != DT_DIR) {
                         kprintf("inode is either null or not a directory\n");
-                        return -1;
+                        return NULL;
                     }
 
                     directory_t *dir = ((directory_t*)inode->resource);
                     if(dir->children_count == 0) {
-                        return -1;
+                        kprintf("Directory \"%s\" has no children slots!\n", inode->name);
+                        return NULL;
                     }
 
                     bool found = false;
@@ -204,13 +127,13 @@ fd_t open(const char *path) {
 
                     if(!found) {
                         kprintf("Failed to find inode with name \"%s\"\n", cpath);
-                        return -1;
+                        return NULL;
                     }
                 }
             break;
 
             default:
-                cpath[cpath_ind++] = path[i];
+                cpath[cpath_ind++] = pathname[i];
             break;
         }
     }
@@ -218,37 +141,55 @@ fd_t open(const char *path) {
     if(strlen(cpath)) {
         if(inode == NULL || inode->type != DT_DIR) {
             kprintf("inode is either null or not a directory\n");
-            return -1;
+            return NULL;
         }
 
         directory_t *dir = ((directory_t*)inode->resource);
         if(dir->children_count == 0) {
-            return -1;
+            return NULL;
         }
 
-        bool found = false;
         for(int x=0;x<dir->children_count;x++) {
             if(dir->children[x] != NULL) {
                 if(strcmp((char*)dir->children[x]->name, cpath) == 0) {
-                    found = true;
-                    inode = dir->children[x];
-                    memset(cpath, 0, cpath_ind);
-                    cpath_ind = 0;
-
-                    for(int i=0;i<MAX_DESCRIPTORS;i++) {
-                        if(open_descriptors[i] != NULL) continue;
-                        open_descriptors[i] = inode;
-                        return i;
-                    }
+                    return dir->children[x];
                 }
             }
         }
 
-        return -1;
-    } else {
-        for(int i=0;i<MAX_DESCRIPTORS;i++) {
-            if(open_descriptors[i] != NULL) continue;
-            open_descriptors[i] = inode;
+        return NULL;
+    }
+
+    return inode;
+}
+
+int mknod(const char* name, const char *path, dt_t type, void *resource) {
+    inode_t *node = get_inode_from_path(path);
+
+    inode_t *child = get_free_inode();
+    child->in_use = true;
+    child->name = name;
+    child->type = type;
+    child->resource = resource;
+
+    if(add_child(node, child) < 0) {
+        kprintf("Failed adding node \"%s\" to node %s\n", child->name, path);
+    }
+
+    return 0;
+}
+
+/// @brief Open a file/device/pipe
+/// @param path The path to the file/device/pipe
+/// @return returning the file descriptor (or -1 if not found)
+fd_t open(const char *path) {
+    inode_t *node = get_inode_from_path(path);
+
+    if(node == NULL) return -1;
+
+    for(int i=0;i<MAX_DESCRIPTORS;i++) {
+        if(open_descriptors[i] == NULL) {
+            open_descriptors[i] = node;
             return i;
         }
     }

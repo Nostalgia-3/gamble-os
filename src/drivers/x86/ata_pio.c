@@ -323,13 +323,13 @@ int ata_entry(module_t *mod) {
         if(d1.exists && d1.size > 0) {
             // create a drive device
             sda = (device_t) { 0 };
-            register_device("/dev/sda", &sda);
+            register_device("sda", &sda);
         }
 
         if(d2.exists && d2.size > 0) {
             // create a drive device
             sdb = (device_t) { 0 };
-            register_device("/dev/sdb", &sdb);
+            register_device("sdb", &sdb);
         }
 
         k_register_int(mod, IRQ_FIRST_BUS);
@@ -342,13 +342,13 @@ int ata_entry(module_t *mod) {
         if(d3.exists && d3.size > 0) {
             // create a drive device
             sdc = (device_t) { 0 };
-            register_device("/dev/sdc", &sdd);
+            register_device("sdc", &sdd);
         }
 
         if(d4.exists && d4.size > 0) {
             // create a drive device
             sdd = (device_t) { 0 };
-            register_device("/dev/sdd", &sdd);
+            register_device("sdd", &sdd);
         }
 
         k_register_int(mod, IRQ_SECOND_BUS);
