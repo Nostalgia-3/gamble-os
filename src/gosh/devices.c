@@ -17,7 +17,7 @@ void _setup_device_manager() {
 
 // Create a device with the name and device, returning -1 if an error occured
 int register_device(const char *name, device_t *dev) {
-    if(dev == 0) return -1;
+    if(dev == NULL) return -1;
     
     for(int i=0;i<MAX_DEVICES;i++) {
         if(devs[i] == 0) {

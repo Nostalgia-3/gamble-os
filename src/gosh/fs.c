@@ -65,15 +65,23 @@ int _init_vfs() {
 
     inode_t* devdir     = create_directory("dev");
     inode_t* infodir    = create_directory("info");
+    inode_t* initrd     = create_directory("initrd");
 
     root_inode = rootdir;
 
     if(add_child(rootdir, devdir) < 0) {
         kprintf("/!\\ Failed creating /dev/\n");
+        return -1;
     }
     
     if(add_child(rootdir, infodir) < 0) {
         kprintf("/!\\ Failed creating /info/\n");
+        return -1;
+    }
+
+    if(add_child(rootdir, initrd) < 0) {
+        kprintf("/!\\ Failed creating /initrd/\n");
+        return -1;
     }
 
     return 0;

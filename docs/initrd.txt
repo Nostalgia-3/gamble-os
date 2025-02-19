@@ -1,0 +1,15 @@
+little endian unless otherwise specified
+
+Header:
+    0x00 - 0x03 : magic number, ascii = "GaOS", big endian hex = 0x47614F53
+    0x04 - 0x07 : file count
+    0x08 - 0x09 : version (current = 1)
+    0x0A - 0x0B : padding byte count
+
+File names are a subset of ASCII, only containing a-z, A-Z, 0-9, and .
+
+File header:
+    0x00 - 0x01 : size of name in bytes
+    0x02 - 0x05 : size of content in bytes
+    0x06 - ???? : name (as described at 0x00 - 0x01)
+    ???? - ???? : content

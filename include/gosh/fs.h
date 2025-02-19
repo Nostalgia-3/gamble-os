@@ -4,27 +4,35 @@
 #include <types.h>
 #include <gosh/common.h>
 
-// linked to the 80x25 vga text driver
 #define DBGOUT   0x8000
-// linked to the i8042 keyboard driver
 #define STDIN    1
 
 typedef enum _dt {
-    // A directory
+    // A directory (directory_t*)
     DT_DIR,
-    // A regular file
+    // A regular file (file_t*)
     DT_REG,
-    // A device
+    // A device (device_t*)
     DT_DEV,
-    // An unknown file
+    // An unknown file (void*)
     DT_UNKNOWN
 } dt_t;
 
-typedef struct _file_t {
-    // TODO: Fill in information about the file
-} file_t;
-
 typedef struct _inode_t inode_t;
+typedef struct _fs_type fs_type_t;
+typedef struct _fs_table fs_table_t;
+
+typedef struct _fs_type {
+    const char *name;
+    
+    fs_table_t *table;
+    
+    inode_t *(*mount)(fs_type_t* fs_type, const char *dev_name);
+    void (*unmount)(fs_type_t* fs_type, const char *dev_name);
+    
+    // Data for use for the filesystem
+    void *internal;
+} fs_type_t;
 
 typedef struct _inode_t {
     inode_t *parent;
@@ -33,20 +41,21 @@ typedef struct _inode_t {
     // The type of the resource
     dt_t type;
     bool in_use;
-    // The resource can be a directory_t, device_t, or a file_t
     void *resource;
     // Add metadata
 } inode_t;
 
 typedef struct _directory_t {
+    bool is_mounted;
+    inode_t *mount;
+
     inode_t **children;
     uint32_t children_count;
-    // Add metadata
 } directory_t;
 
 typedef struct _dirent {
     const char *d_name;
-    char d_type;
+    dt_t d_type;
 } dirent;
 
 // Initialize the virtual filesystem
@@ -77,12 +86,14 @@ ssize_t pwrite(fd_t fd, void *buf, size_t count, off_t offset);
 // Manipulate an open file descriptor
 int ioctl(int fd, int op, void *data);
 
-// Read a number of directory entries from the directory fd passed; works
-// similarly to getdents(2) on unix-based operating systems. Count is the number
-// of of dirents are within the passed directory
-int getdents(unsigned int fd, dirent* dirp, unsigned int count);
+// Read a singular directory entry, returning the total amount
+// of directory entries within the directory
+int getdents(unsigned int fd, dirent* dirp, unsigned int index);
+
+// Register a filesystem for use when mounting
+int register_fs(fs_type_t *fs);
 
 // Mount a drive to dest
-int mount(const char *src, const char *dest);
+int mount(const char *src, const char *dest, const char *fs_type);
 
 #endif//GOSH_FS_H

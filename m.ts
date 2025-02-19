@@ -3,6 +3,49 @@ import { WebSocketServer } from 'npm:ws';
 import p from 'node:path';
 import { existsSync } from 'node:fs';
 
+export class DynamicData {
+    buffer: Uint8Array;
+    length: number;
+
+    constructor() {
+        this.buffer = new Uint8Array(0);
+        this.length = 0;
+    }
+
+    increaseSize(c: number) {
+        this.length += c;
+        const r = new Uint8Array(this.length);
+        r.set(this.buffer);
+        this.buffer = r;
+    }
+
+    writeU32LE(d: number) {
+        this.increaseSize(4);
+        new DataView(this.buffer.buffer).setUint32(this.length-4, d, true);
+    }
+
+    writeU32BE(d: number) {
+        this.increaseSize(4);
+        new DataView(this.buffer.buffer).setUint32(this.length-4, d, false);
+    }
+
+    writeU16LE(d: number) {
+        this.increaseSize(2);
+        new DataView(this.buffer.buffer).setUint16(this.length-2, d, true);
+    }
+
+    writeAsciiString(s: string) {
+        const b = new TextEncoder().encode(s);
+        this.increaseSize(b.length);
+        this.buffer.set(b, this.length-b.length);
+    }
+
+    writeUint8Array(u: Uint8Array) {
+        this.increaseSize(u.length);
+        this.buffer.set(u, this.length-u.length);
+    }
+}
+
 /**
  * Return the last portion of a path. This is typically used
  * to get the file name from an array

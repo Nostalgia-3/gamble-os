@@ -20,15 +20,15 @@ _load:
     jmp CODE_SEG:_newgdt
 _newgdt:
     ; do paging in the future
-    ; call boot_setup_paging
-    ; mov eax, kernel_page_dir
-    ; mov cr3, eax
-    ; mov eax, cr4
-    ; or eax, 0x00000010
-    ; mov cr4, eax
-    ; mov eax, cr0
-    ; or eax, 0x80000001
-    ; mov cr0, eax
+    call boot_setup_paging
+    mov eax, kernel_page_dir
+    mov cr3, eax
+    mov eax, cr4
+    or eax, 0x00000010
+    mov cr4, eax
+    mov eax, cr0
+    or eax, 0x80000001
+    mov cr0, eax
 
     call _start             ; jump to the kernel _start function
     jmp $                   ; and if it ever returns, halt
@@ -75,7 +75,7 @@ gdt_descriptor:
 CODE_SEG equ gdt_code - gdt_start
 DATA_SEG equ gdt_data - gdt_start
 
-FLAGS       equ 0b11 | (1 << 2) ; | (1 << 16)
+FLAGS       equ 0b11 | (1 << 2); | (1 << 16)
 MAGIC       equ 0x1BADB002
 CHECKSUM    equ -(MAGIC + FLAGS)
 

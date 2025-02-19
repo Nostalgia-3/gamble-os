@@ -2,6 +2,8 @@
 #include "types.h"
 #include <math.h>
 
+#include <process.h>
+
 #include <gosh/gosh.h>
 #include <memory.h>
 #include <int.h>
@@ -15,12 +17,16 @@
 #include <drivers/pci/uhci.h>
 #include <drivers/pci/ehci.h>
 #include <drivers/pci/nvme.h>
+#include <drivers/fs/initrd.h>
 
 #include <multiboot.h>
 
 #include <shell.h>
 
 void irq_handler(u32 i) {
+    if(i == 0x00) {
+        _next_proc();
+    }
     k_handle_int((u8)i+0x20);
 }
 
@@ -49,6 +55,8 @@ void _start(multiboot_info_t *mbd, unsigned int magic) {
         kprintf("Module manager created\n");
     }
 
+    multiboot_module_t *m = (void*)mbd->mods_addr;
+
     module_t vga    = get_vga_module(mbd);
     module_t i8042  = get_i8042_module();
     module_t ata    = get_ata_module();
@@ -58,9 +66,11 @@ void _start(multiboot_info_t *mbd, unsigned int magic) {
     module_t ac97   = get_ac97_module();
     module_t i8254  = get_i8254_module();
     module_t nvme   = get_nvme_module();
+    module_t initrd = get_initrd_module((void*)m->mod_start, m->mod_end-m->mod_start);
 
     open_module(&vga);
     open_module(&i8042);
+    open_module(&initrd);
     // open_module(&ata);
 
     // open_module(&uhci);
@@ -68,6 +78,8 @@ void _start(multiboot_info_t *mbd, unsigned int magic) {
     // open_module(&ac97);
     // open_module(&i8254);
     // open_module(&nvme);
+
+    // mount("/dev/ramdisk", "/initrd/", "initrd");
 
     int stdout  = open("/dev/console");
     int stdin   = open("/dev/kbd");

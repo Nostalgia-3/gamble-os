@@ -22,10 +22,11 @@ const INCLUDE           = 'include';
 yargs(Deno.args)
     .strictCommands()
     .demandCommand()
-    .command('run', 'Build then emulate the operating system binary', () => {}, (args) => { build(args); emulate(args); })
+    .command('run', 'Build then emulate the operating system binary', () => {}, (args) => { initrd(args); build(args); emulate(args); })
     .command('emulate', 'Emulate the first image binary found in build/', () => {}, (args) => { emulate(args) })
     .command('listen', 'Start an external server', () => {}, () => { m.startExServer(); })
     .command('compile', `Compile the operating system to a binary`, ()=>{}, (args)=>{ console.log(`Kernel built to ${build(args)}`); })
+    .command('initrd', `Generate an initrd with the contents of the initrd/ directory`, () => {}, (args) => { initrd(args); })
     .option('output', {
         alias: 'o',
         type: 'string',
@@ -75,6 +76,35 @@ yargs(Deno.args)
         default: false
     })
 .parseSync();
+
+function initrd(pargs: Record<string, unknown>) {
+    m.verbose(`\x1b[90m[\x1b[32m@\x1b[90m]\x1b[0m Creating initrd`);
+
+    const d = new m.DynamicData();
+    
+    const filecount = Deno.readDirSync('initrd/').filter((v)=>!v.isDirectory).toArray().length;
+
+    d.writeU32BE(0x47614F53);
+    d.writeU32LE(filecount)
+    d.writeU16LE(0x01);
+    d.writeU16LE(0x00);
+
+    for(const cf of Deno.readDirSync('initrd/')) {
+        if(cf.isDirectory) {
+            m.verbose(`\x1b[90m[\x1b[33m@\x1b[90m]\x1b[0m initrd doesn't support directories at the moment`);
+            continue;
+        }
+
+        const n = cf.name;
+        const c = Deno.readFileSync(`initrd/${cf.name}`);
+        d.writeU32LE(n.length);
+        d.writeU32LE(c.length);
+        d.writeAsciiString(n);
+        d.writeUint8Array(c);
+    };
+
+    Deno.writeFileSync('gos.initrd', d.buffer);
+}
 
 function emulate(pargs: Record<string, unknown>) {
     const output = m.scanDir('build', /.*\.iso/);
@@ -180,6 +210,7 @@ function build(pargs: Record<string, unknown>) {
     }
 
     m.copyFile('grub.cfg', 'build/iso/boot/grub/grub.cfg');
+    m.copyFile('gos.initrd', 'build/iso/sys/gos.initrd');
     m.copyFile(KERNEL, 'build/iso/sys/kernel.elf');
 
     m.call(`grub-mkrescue -o ${outFile} build/iso`);
