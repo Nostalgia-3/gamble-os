@@ -53,6 +53,10 @@ typedef struct _directory_t {
     uint32_t children_count;
 } directory_t;
 
+typedef struct _file_t {
+    
+} file_t;
+
 typedef struct _dirent {
     const char *d_name;
     dt_t d_type;

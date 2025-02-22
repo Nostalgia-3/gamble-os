@@ -1,3 +1,4 @@
+#include <inode.h>
 #include <drivers/fs/initrd.h>
 #include <gosh/gosh.h>
 #include <memory.h>
@@ -45,28 +46,6 @@ inode_t *initrd_mount(fs_type_t *fs_type, const char *dev_name) {
     
     if(inte->inodes == NULL) return 0;
     memset(inte->inodes, 0, sizeof(inode_t)*inte->inode_count);
-
-    initrd_header *header = initrd_address;
-    if(header->magic != 0x534F6147) {
-        kprintf("initrd magic isn't correct! (expected=0x534F6147, got=0x%08X)\n", header->magic);
-        return DRIVER_FAILED;
-    } else if(header->version != 0x01) {
-        kprintf("initrd version isn't correct! (expected=1, got=%u)\n", header->version);
-        return DRIVER_FAILED;
-    }
-
-    kprintf("magic: %X\nfilecount: %u\nversion: %u\npadding: %u\n", header->magic, header->filecount, header->version, header->padding);
-
-    u32 offset = sizeof(initrd_header) + header->padding;
-
-    for(int i=0;i<header->filecount;i++) {
-        initrd_file_header *h = initrd_address+offset;
-        offset += sizeof(initrd_file_header);
-        kprintf("name = ");
-        write(DBGOUT, initrd_address+offset, h->name_size);
-        kprintf(", size = %u\n", h->content_size);
-        offset += h->name_size + h->content_size;
-    }
 }
 
 void initrd_unmount(fs_type_t *fs_type, const char *dev_name) {
@@ -98,6 +77,28 @@ int initrd_start(module_t *mod) {
     if(register_fs(&initrd_fs) < 0) {
         kprintf("Failed registering initrd filesystem\n");
         return DRIVER_FAILED;
+    }
+
+    initrd_header *header = initrd_address;
+    if(header->magic != 0x534F6147) {
+        kprintf("initrd magic isn't correct! (expected=0x534F6147, got=0x%08X)\n", header->magic);
+        return DRIVER_FAILED;
+    } else if(header->version != 0x01) {
+        kprintf("initrd version isn't correct! (expected=1, got=%u)\n", header->version);
+        return DRIVER_FAILED;
+    }
+
+    kprintf("filecount: %u\n", header->filecount);
+
+    u32 offset = sizeof(initrd_header) + header->padding;
+
+    for(int i=0;i<header->filecount;i++) {
+        initrd_file_header *h = initrd_address+offset;
+        offset += sizeof(initrd_file_header);
+        kprintf("name = ");
+        write(DBGOUT, initrd_address+offset, h->name_size);
+        kprintf(", size = %u\n", h->content_size);
+        offset += h->name_size + h->content_size;
     }
 
     return DRIVER_SUCCESS;

@@ -9,26 +9,30 @@
 
 #include <stdint.h>
 
-typedef unsigned char   bool;
+// TODO: This should be determined by some value that determines whether it
+// should compile for 32-bit or 64-bit environments
+#define __SIZE_T uint32_t
 
-typedef __UINT8_TYPE__  u8;
-typedef __UINT16_TYPE__ u16;
-typedef __UINT32_TYPE__ u32;
-typedef __UINT64_TYPE__ u64;
+typedef uint8_t		bool;
 
-typedef __INT8_TYPE__   i8;
-typedef __INT16_TYPE__  i16;
-typedef __INT32_TYPE__  i32;
-typedef __INT64_TYPE__  i64;
+typedef uint8_t 	u8;
+typedef uint16_t 	u16;
+typedef uint32_t	u32;
+typedef uint64_t	u64;
 
-typedef float           f32;
-typedef double          f64;
+typedef int8_t  	i8;
+typedef int16_t		i16;
+typedef int32_t 	i32;
+typedef int64_t 	i64;
 
-typedef __SIZE_TYPE__   size_t;
-typedef signed int      ssize_t;
+typedef float       f32;
+typedef double      f64;
 
-typedef i32             fd_t;
-typedef u64             off_t;
+typedef __SIZE_T  	size_t;
+typedef signed int  ssize_t;
+
+typedef i32         fd_t;
+typedef u64         off_t;
 
 typedef typeof((int*)0 - (int*)0)   ptrdiff_t;
 typedef u32                         wint_t;
