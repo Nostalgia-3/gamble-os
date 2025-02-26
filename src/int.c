@@ -104,7 +104,7 @@ void disable_IRQ(u8 IRQline) {
         IRQline -= 8;
     }
     value = inb(port) | (1 << IRQline);
-    outb(port, value);        
+    outb(port, value);
 }
 
 void enable_IRQ(u8 IRQline) {
@@ -118,7 +118,7 @@ void enable_IRQ(u8 IRQline) {
         IRQline -= 8;
     }
     value = inb(port) & ~(1 << IRQline);
-    outb(port, value);        
+    outb(port, value);
 }
 
 void t_move_pic(u8 off1, u8 off2) {

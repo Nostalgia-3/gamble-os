@@ -113,6 +113,19 @@ inode_t* setup_directory(inode_t *inode, const char* name) {
     return inode;
 }
 
+inode_t* setup_file(inode_t *inode, const char* name, fs_type_t *fs) {
+    file_t *d = k_malloc(sizeof(file_t));
+    if(d == NULL) return NULL;
+    d->fs = fs;
+    
+    inode->in_use = true;
+    inode->name = name;
+    inode->resource = d;
+    inode->type = DT_FILE;
+
+    return inode;
+}
+
 inode_t* setup_node(inode_t* inode, const char* name, dt_t type, void* resource) {
     inode->in_use = true;
     inode->name = name;

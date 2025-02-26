@@ -98,6 +98,7 @@ int initrd_start(module_t *mod) {
         kprintf("name = ");
         write(DBGOUT, initrd_address+offset, h->name_size);
         kprintf(", size = %u\n", h->content_size);
+        
         offset += h->name_size + h->content_size;
     }
 

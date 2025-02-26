@@ -11,7 +11,7 @@ typedef enum _dt {
     // A directory (directory_t*)
     DT_DIR,
     // A regular file (file_t*)
-    DT_REG,
+    DT_FILE,
     // A device (device_t*)
     DT_DEV,
     // An unknown file (void*)
@@ -20,15 +20,14 @@ typedef enum _dt {
 
 typedef struct _inode_t inode_t;
 typedef struct _fs_type fs_type_t;
-typedef struct _fs_table fs_table_t;
 
 typedef struct _fs_type {
     const char *name;
     
-    fs_table_t *table;
-    
     inode_t *(*mount)(fs_type_t* fs_type, const char *dev_name);
     void (*unmount)(fs_type_t* fs_type, const char *dev_name);
+    ssize_t (*read)(inode_t* inode, void *buf, size_t size, size_t offset);
+    ssize_t (*write)(inode_t* path, const void *buf, size_t size, size_t offset);
     
     // Data for use for the filesystem
     void *internal;
@@ -54,7 +53,7 @@ typedef struct _directory_t {
 } directory_t;
 
 typedef struct _file_t {
-    
+    fs_type_t *fs;
 } file_t;
 
 typedef struct _dirent {
