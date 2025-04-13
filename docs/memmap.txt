@@ -1,0 +1,13 @@
+Page #1 (0x00000000 - 0x00001000)
+    This page will never point to real address space, so page faults happen
+    when trying to access NULL
+
+Page memory is stored at
+    real:       0x00200000 - 0x005FFFFF (4MiB)
+    virtual:    0xF0000000 - 0xF03FFFFF (4MiB)
+
+The kernel will always be loaded into virtual memory in the last
+
+kernel virtual memory map:
+    0xF0000000 - 0xF03FFFFF : 1024 page tables [each 4096 * 4] (4MiB)
+    0xF0400000 - 0xFFFFFFFF : kernel code (252MiB)

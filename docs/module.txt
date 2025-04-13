@@ -1,0 +1,10 @@
+MODULE
+
+    string name
+    module_start(module)
+    module_interrupt(module, int)
+    module_end(module)
+
+MODULE_LOADER
+
+    MODULE(module)

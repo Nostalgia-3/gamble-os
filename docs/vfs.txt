@@ -1,0 +1,14 @@
+VFS
+    mount(source device inode, directory to mount, filesystem type)
+    
+    mkdir(file, flags)
+    create(file, flags)
+    read(file, buf, count, offset)
+    write(file, buf, count, offset)
+    ioctl(device, op, data)
+
+MOUNT
+    mkdir(file, flags)
+    create(file, flags)
+    read(file, buf, count, offset)
+    write(file, buf, count, offset)

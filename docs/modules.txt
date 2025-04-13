@@ -1,0 +1,16 @@
+MODULE_I8042
+
+    The Intel 8042 is the default PS/2 controller on IBM PCs. It is
+    automatically defined if the machine is set to MACHINE_IBM_PC.
+
+MODULE_ATA_PIO
+
+    ATA is the protocol for reading and writing to PATA and SATA drivers. This
+    is automatically defined if the machine is set to MACHINE_IBM_PC.
+
+MODULE_VGA
+
+    The VGA module allows for use of 80x60 text mode and up to 640x480 @ 16
+    colors. This is automatically defined if the machine is set to
+    MACHINE_IBM_PC.
+

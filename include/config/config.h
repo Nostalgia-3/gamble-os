@@ -1,0 +1,19 @@
+#pragma once
+
+#include <config/config_defines.h>
+
+// The CPU is an indicator of what the kernel should compile to, as well
+// as what features (e.g. [PAE](https://en.wikipedia.org/wiki/Physical_Address_Extension)) are allowed. The primary CPU that PAE
+// is the I686/Pentium class processors.
+#define CPU     CPU_I686
+
+// The machine further specifies what should be used; as an example, Intel Macs
+// don't have the Intel 8042, while IBM PCs do.
+#define MACHINE  MACHINE_IBM_PC
+
+// Uncomment this to allow the kernel to write debug messages
+#define KERNEL_DEBUG
+
+// Define modules here; a list can be found in docs/modules.txt
+
+#include <config/config_done.h>
