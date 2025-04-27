@@ -4,8 +4,9 @@
 #include <fs/vfs.h>
 
 #include <printf.h>
-
 #include <utils.h>
+
+#include <x86/pic.h>
 
 extern uint32_t read_cr3();
 
@@ -24,9 +25,9 @@ process* create_process(inode* file) {
     // with PAE; but what about poor i386 -> i586 machines!!!) but I can't think
     // of any better way to do this atm.
     // Copy the kernel directory pages to the processes page directory
-    size_t* real_pagedir = (size_t*)get_current_pagedir();
+    size_t* prev_pagedir = (size_t*)get_current_pagedir();
     for(int i=0;i<256;i++) {
-        p->page_dir[768 + i] = (size_t*)real_pagedir[768 + i];
+        p->page_dir[768 + i] = (size_t*)prev_pagedir[768 + i];
     }
 
     // I *know* that this is inefficient
@@ -43,22 +44,29 @@ process* create_process(inode* file) {
 
     off_t _d = 0;
 
-    if(f->filesize != f->fs->read(f->fs, file, (void*)0x1000, f->filesize, &_d)) {
-        kpanic("Returned value of \x1b[91mfs->read\x1b[0m is not equal to the filesize!");
+    size_t amount_read = (size_t)f->fs->read(f->fs, file, (void*)0x1000, f->filesize, &_d);
+
+    if(f->filesize != amount_read) {
+        kpanic("Returned value of \x1b[91mfs->read\x1b[0m is not equal to the filesize! (expected = %d, got = %d)", f->filesize, amount_read);
     }
 
     p->eip = 0x1000;
     p->esp = 0xC0000000;
+    p->cs  = 0x00000008;
+    p->eflags = 0x10200;
+    p->can_run = true;
 
-    // Go back to the real page directory
-    swap_pagedir(real_pagedir);
+    // Go back to the previous page directory
+    swap_pagedir(prev_pagedir);
 
     return p;
 }
 
 // Start a process
-void start_process(process* p) {
-    swap_pagedir(p->page_dir);
-    void(*yabba)() = (void(*)())0x1000;
-    yabba();
-}
+// void start_process(process* p) {
+//     swap_pagedir(p->page_dir);
+//     cur_process = p;
+
+//     void(*pp)() = (void(*)())p->eip;
+//     pp();
+// }

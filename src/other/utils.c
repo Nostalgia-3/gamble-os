@@ -1,6 +1,28 @@
 #include <utils.h>
 
 void hexdump(uint8_t* addr, size_t count) {
+    // if(count == 0) return;
+
+    // for(int i=0;i<count;i++) {
+    //     if((i % 16) == 0) {
+    //         if(i != 0) {
+    //             printf_(" |................|\n");
+    //         }
+
+    //         printf_("%08X", addr);
+    //     }
+
+    //     if((i % 8) == 0 && i != 0) printf_(" ");
+
+    //     printf_(" %02X", *(addr+i));
+    // }
+
+    // if(!(count % 16)) {
+    //     printf_(" |................|");
+    // }
+
+    // printf_("\n");
+
     if(count == 0) return;
     for(int i=0;i<count;i++) {
         if((i % 16) == 0) {
@@ -29,5 +51,5 @@ void hexdump(uint8_t* addr, size_t count) {
         if(is_printable(c)) printf_("%c", c);
         else printf_(".");
     }
-    printf_("|");
+    printf_("|\n");
 }

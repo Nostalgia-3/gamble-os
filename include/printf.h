@@ -59,15 +59,17 @@ void _putchar(char character);
  * \param format A string that specifies the format of the output
  * \return The number of characters that are written into the array, not counting the terminating null character
  */
-#define printf(reason, ...) do { \
+ #define printf(reason, ...) do { \
     printf_("\x1b[92mLOG\x1b[0m(\x1b[96m" __FILE__ "\x1b[0m:\x1b[93m%d\x1b[0m): " reason "\n", __LINE__, ##__VA_ARGS__); \
 } while(0)
 
- // #define printf printf_
-
 int printf_(const char* format, ...);
+
 #else
+
 #define printf(x, ...)
+int printf_(const char* format, ...);
+
 #endif
 
 /**

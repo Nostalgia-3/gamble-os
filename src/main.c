@@ -10,6 +10,7 @@
 #include <str.h>
 #include <process.h>
 #include <x86/gdt.h>
+#include <scheduler.h>
 
 extern uint32_t read_cr2();
 
@@ -82,6 +83,8 @@ void _start(multiboot_info_t *r_mbd, unsigned int magic) {
     mem_init(mbd);
     gdt_init();
 
+    pqueue_init();
+
     if(vfs_init() < 0) kpanic("Failed to initialize virtual filesystem");
     if(module_init() < 0) kpanic("Failed to initialize module system");
     if(device_init() < 0) kpanic("Failed to initialize device manager");
@@ -91,28 +94,25 @@ void _start(multiboot_info_t *r_mbd, unsigned int magic) {
     module i8042    = get_i8042_module();
     module initrd   = get_initrd_module((void*)(m->mod_start + 0xC0000000), m->mod_end - m->mod_start);
     module tty      = get_tty_module();
-    module pit      = get_pit_module();
 
     module_load(&tty);
     module_load(&i8042);
     module_load(&initrd);
-    module_load(&pit);
 
-    if(mount(NULL, node_at(get_root(), "/initrd", strlen("/initrd")), "initrd") < 0) {
+    if(mount(NULL, node_at(get_root(), "/initrd", sizeof("/initrd")), "initrd") < 0) {
         kpanic("Failed to mount initrd!");
     }
 
-    inode *init = node_at(get_root(), "/initrd/init", strlen("/initrd/init"));
-
+    inode *init = node_at(get_root(), "/initrd/init", sizeof("/initrd/init"));
+    
     if(init == NULL) {
         kpanic("/initrd/init not found!");
     }
 
     process* p = create_process(init);
+    add_to_process_queue(p);
 
-    printf("%08X", p->page_dir[0]);
-
-    start_process(p);
+    pqueue_start();
     
     while(1);
 }

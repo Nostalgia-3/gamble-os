@@ -1,26 +1,83 @@
 #include <printf.h>
 #include <fs/vfs.h>
+#include <process.h>
+#include <utils.h>
+#include <scheduler.h>
 
-struct sregs {
-    uint32_t edx, ecx, ebx, eax;
+#define MAX_SYSCALLS 32
+
+typedef int(*syscall_handler)(volatile struct scheduler_data* data);
+
+int syscall_exit(volatile struct scheduler_data* data) {
+    // TODO: actually delete processes when they're no longer running
+    process* p = get_current_process();
+    if(p == NULL) return -1;
+    p->can_run = false;
+    return 0;
 };
 
-#define EREG "\x1b[93m%08X\x1b[0m"
+int syscall_write(volatile struct scheduler_data* data) {
+    if(data->ebx > 1) kpanic("What are you doing?");
+    write(data->ebx == 1 ? "/dev/tty" : "/dev/kbd", (void*)data->ecx, data->edx, 0);
+    return 0;
+};
 
-void syscall_c(struct sregs d) {
-    switch(d.eax) {
-        case 0: // EXIT
-            printf("exit");
-        break;
+int syscall_read(volatile struct scheduler_data* data) {
+    if(data->ebx > 1) kpanic("What are you doing?");
+    read(data->ebx == 1 ? "/dev/tty" : "/dev/kbd", (void*)data->ecx, data->edx, 0);
+    return 0;
+};
 
-        case 1: // WRITE
-            write(d.ebx == 1 ? "/dev/tty" : "/dev/kbd", (void*)d.ecx, d.edx, 0);
-        break;
+int syscall_open(volatile struct scheduler_data* data) {
+    printf("TODO");
+    return -1;
+};
+
+int syscall_close(volatile struct scheduler_data* data) {
+    printf("TODO");
+    return -1;
+};
+
+int syscall_fork(volatile struct scheduler_data* data) {
+    printf("TODO");
+    return -1;
+};
+
+int syscall_exec(volatile struct scheduler_data* data) {
+    return 0;
+};
+
+int syscall_getpid(volatile struct scheduler_data* data) {
+    printf("TODO");
+    return -1;
+};
+
+const syscall_handler handlers[MAX_SYSCALLS] = {
+    /* 0 */ syscall_exit,
+    /* 1 */ syscall_write,
+    /* 2 */ syscall_read,
+    /* 3 */ syscall_open,
+    /* 4 */ syscall_close,
+    /* 5 */ syscall_fork,
+    /* 6 */ syscall_exec,
+    /* 7 */ syscall_getpid
+};
+
+void syscall_c(volatile struct scheduler_data d) {
+    if(d.eax > MAX_SYSCALLS) {
+        kpanic("Unknown syscall #%u", d.eax);
     }
-    // printf(
-    //     "\x1b[92mSyscall:\x1b[0m\n"
-    //     "  EAX="EREG" EBX="EREG" ECX="EREG" EDX="EREG"",
-    //     d.eax, d.ebx, d.ecx, d.edx
-    // );
+
+    syscall_handler handler = handlers[d.eax];
+
+    if(handler == NULL) {
+        kpanic("Unkown syscall #%u", d.eax);
+    }
+
+    if(handler(&d) < 0) {
+        kpanic("An error occured while running syscall #%u", d.eax);
+    }
+
+    d = scheduler_next_process(d);
     return;
 }

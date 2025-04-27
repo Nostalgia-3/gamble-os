@@ -14,6 +14,10 @@
 // Uncomment this to allow the kernel to write debug messages
 #define KERNEL_DEBUG
 
+// The max number of processes the kernel supports running at once
+#define MAX_PROCESSES 256
+
 // Define modules here; a list can be found in docs/modules.txt
+
 
 #include <config/config_done.h>

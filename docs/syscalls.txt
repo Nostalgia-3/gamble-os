@@ -1,0 +1,45 @@
+SYSCALLS
+
+Calling convention (ABI?):
+
+    return = eax
+    arg #0 = eax
+    arg #1 = ebx
+    arg #2 = ecx
+    arg #3 = edx
+    arg #4 = edi
+    arg #5 = ebp
+
+0x00: void exit()
+
+    Exit the current process, cleaning up all open system resources.
+
+0x01: ssize_t write(uint32_t fd, const void* buf, size_t size)
+
+    Write to an open file descriptor, specifying a buffer with a size in bytes.
+
+0x02: ssize_t read(uint32_t fd, void* buf, size_t size)
+
+    Read from an open file descriptor, specifying a buffer with a size in bytes.
+
+0x03: uint32_t open(const char* path)
+
+    Open a file/directory specified by a zero-terminated (c-style) path string.
+
+0x04: uint32_t close(uint32_t fd)
+
+    Close an open file descriptor. Returns zero on success, and one on error.
+
+0x05: uint32_t fork()
+
+    Creates a copy of the current process. Returns zero on the new process, and
+    the pid of the new process on the original. 
+
+0x06: uint32_t exec(const char* path)
+
+    Creates a new process with the executable passed by the (null-terminated)
+    path string. Returns zero on success and one on failure.
+
+0x07: uint32_t getpid()
+
+    Returns the process id of the current process.

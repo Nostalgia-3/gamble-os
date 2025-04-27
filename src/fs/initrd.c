@@ -116,7 +116,7 @@ ssize_t initrd_read(fs_mount* fs, inode* in, void* buf, uint32_t count, off_t *o
     initrd_header header;
 
     if(read("/dev/ramdisk", &header, sizeof(initrd_header), 0) < 0) {
-        printf("Failed to get ramdisk header");
+        printf("Failed to get ramdisk header!\n");
         return -1;
     }
 
@@ -135,15 +135,13 @@ ssize_t initrd_read(fs_mount* fs, inode* in, void* buf, uint32_t count, off_t *o
         
         read("/dev/ramdisk", &h, sizeof(initrd_file_header), off);
         off += sizeof(initrd_file_header) + h.name_size;
-
+        
         if(i == f) {
-            // if(*offset > h.content_size) return -1;
             if(count > h.content_size) count = h.content_size;
-
             return read("/dev/ramdisk", buf, count, off);
         }
-
-        offset += h.content_size;
+        
+        off += h.content_size;
     }
 
     return 0;

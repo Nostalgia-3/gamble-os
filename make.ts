@@ -200,7 +200,7 @@ async function compile(args: Record<string, unknown>) {
     b.copy(KERNEL, 'build/iso/sys/kernel.elf');
 
     if(args.x) {
-        const sock = await Deno.connect({ hostname: '172.27.152.12' as string, port: 8096 });
+        const sock = await Deno.connect({ hostname: '172.27.152.12' as string, port: 8099 });
         b.verbose(`grub-mkrescue -o ${outFile} build/iso`);
         await sock.write(new TextEncoder().encode(`r::grub-mkrescue -o ${outFile} build/iso`));
         await sock.read(new Uint8Array(1));
@@ -274,8 +274,8 @@ b.addTask('run', `Compile then emulate the kernel`, (args) => {
 });
 
 b.addTask('server', `Run a server for qemu`, (_args) => {
-    const listener = Deno.listen({ port: 8096 });
-    b.verbose(`Started server on port :8096`);
+    const listener = Deno.listen({ port: 8099 });
+    b.verbose(`Started server on port :8099`);
 
     (async () => {
         for await(const conn of listener) {
