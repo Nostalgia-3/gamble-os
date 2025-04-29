@@ -88,32 +88,6 @@ m_irq_handler 13
 m_irq_handler 14
 m_irq_handler 15
 
-extern should_change_pqueue
-extern scheduler_next_process
-
-; this is the timer handler
-irq_handler_0:
-    push ax
-    mov ah, 0
-    mov al, 0x20
-    cmp ah, 8
-    jl .pic1
-.pic2:
-    out 0xA0, al
-.pic1:
-    out 0x20, al
-    pop ax
-
-    call should_change_pqueue
-    cmp eax, 0
-    je .done
-
-    pusha
-    call scheduler_next_process
-    popa
-.done:
-    iretd
-
 global irq_handle_table
 irq_handle_table:
 %assign i 0
@@ -139,4 +113,18 @@ syscall_handler_asm:
     call syscall_c
     popa
 
+    iretd
+
+extern scheduler_tick
+
+; this is the timer handler
+irq_handler_0:
+    push ax
+    mov al, 0x20
+    out 0x20, al
+    pop ax
+    
+    pusha
+    call scheduler_tick
+    popa
     iretd

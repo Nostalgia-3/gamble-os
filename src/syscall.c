@@ -24,6 +24,7 @@ int syscall_write(volatile struct scheduler_data* data) {
 
 int syscall_read(volatile struct scheduler_data* data) {
     if(data->ebx > 1) kpanic("What are you doing?");
+    printf_("read\n");
     read(data->ebx == 1 ? "/dev/tty" : "/dev/kbd", (void*)data->ecx, data->edx, 0);
     return 0;
 };
@@ -78,6 +79,7 @@ void syscall_c(volatile struct scheduler_data d) {
         kpanic("An error occured while running syscall #%u", d.eax);
     }
 
-    d = scheduler_next_process(d);
+    scheduler_tick(d);
+    printf_("%08X\n", d.eip);
     return;
 }

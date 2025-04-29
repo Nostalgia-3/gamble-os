@@ -54,7 +54,7 @@ const DATE              = Date.now();
 const KERNEL            = 'build/kernel.elf';
 const LINKER_SCRIPT     = 'linker.ld';
 
-const CFLAGS            = `-O2 -s -m32 -fno-pie -nostdlib -ffreestanding -Wall -Werror`; // -s = strip, -g = include debugger symbols
+const CFLAGS            = `-O2 -g -m32 -fno-pie -nostdlib -ffreestanding -Wall -Werror`; // -s = strip, -g = include debugger symbols
 const INCLUDE           = 'include';
 
 const b = new Builder();

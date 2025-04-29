@@ -113,6 +113,5 @@ void _start(multiboot_info_t *r_mbd, unsigned int magic) {
     add_to_process_queue(p);
 
     pqueue_start();
-    
     while(1);
 }
