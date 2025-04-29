@@ -35,7 +35,6 @@ void add_to_process_queue(process* p) {
         if(queue[i] != NULL) continue;
         queue[i] = p;
         p->pid = i;
-        printf_("%08X, %08X\n", queue[i], queue[i]->page_dir);
         return;
     }
 

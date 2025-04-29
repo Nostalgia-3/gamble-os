@@ -6,9 +6,11 @@
 %endmacro
 
 %macro print 1
+    push eax
     push %1
     call printf_
     add esp, 4
+    pop eax
 %endmacro
 
 section .data
@@ -25,10 +27,9 @@ cur_process: dd 0
 
 ; a list of process pointers
 global queue
-queue: times MAX_PROCESSES dd 0
+queue: times MAX_PROCESSES + 1 dd 0
 
 shutting_down:  db "Shutting down.", 10, 0
-tick_str:       db "tick", 10, 0
 
 section .text
 
@@ -73,7 +74,7 @@ scheduler_tick:
 .tick:
     mov     ecx, DWORD [cur_process]
     shl     ecx, 2
-    mov     eax, [queue + ecx]
+    mov     eax, DWORD [queue + ecx]
 
     cmp     eax, 0
     je      .bump_process_queue
@@ -97,7 +98,7 @@ scheduler_tick:
 .next_in_queue:
     inc     DWORD [cur_process]
 
-    ; if(cur_process > MAX_PROCESSES) goto .w4;
+    ; if(cur_process > MAX_PROCESSES) goto .reset_cur_progress;
     cmp     DWORD [cur_process], MAX_PROCESSES
     jg      .reset_cur_process
 
@@ -116,16 +117,15 @@ scheduler_tick:
 .w3:
     cmp     eax, 0
     je      .next_in_queue
-    jmp     $
     cmp     DWORD [eax + 0x44], 0   ; if(!can_run)
     je      .next_in_queue          ;   goto .next_in_queue
     jmp     .copy_registers         ; goto .copy_registers
 .w2:
     cmp     eax, 0
     je      .shut_down
+    cmp     DWORD [eax + 0x44], 0   ; if(!can_run)
+    je      .shut_down
     jmp     .copy_registers
 .shut_down:
-    push    shutting_down
-    call    printf_
-    add     esp, 4
+    print   shutting_down
     jmp     $

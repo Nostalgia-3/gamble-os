@@ -103,8 +103,8 @@ void _start(multiboot_info_t *r_mbd, unsigned int magic) {
         kpanic("Failed to mount initrd!");
     }
 
-    inode *init = node_at(get_root(), "/initrd/init", sizeof("/initrd/init"));
-    
+    inode* init = node_at(get_root(), "/initrd/init", sizeof("/initrd/init"));
+
     if(init == NULL) {
         kpanic("/initrd/init not found!");
     }

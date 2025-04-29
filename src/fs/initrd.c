@@ -23,16 +23,16 @@ typedef struct _initrd_file_header {
 } initrd_file_header;
 
 inode* initrd_mount(fs_mount* mount, inode* dev) {
-    inode* d = node_at(get_root(), "/dev/ramdisk", strlen("/dev/ramdisk"));
+    inode* ramdisk = node_at(get_root(), "/dev/ramdisk", strlen("/dev/ramdisk"));
     
-    if(d == NULL) {
+    if(ramdisk == NULL) {
         printf("Failed to find /dev/ramdisk!");
         return NULL;
     }
 
     initrd_header header;
 
-    if(read("/dev/ramdisk", &header, sizeof(initrd_header), 0) < 0) {
+    if(read(ramdisk, &header, sizeof(initrd_header), 0) < 0) {
         printf("Failed to get ramdisk header");
         return NULL;
     }
@@ -57,7 +57,7 @@ inode* initrd_mount(fs_mount* mount, inode* dev) {
     for(int i=0;i<header.filecount;i++) {
         initrd_file_header h;
         
-        read("/dev/ramdisk", &h, sizeof(initrd_file_header), offset);
+        read(ramdisk, &h, sizeof(initrd_file_header), offset);
         offset += sizeof(initrd_file_header);
 
         inode* node = kmalloc(sizeof(inode), 0);
@@ -67,7 +67,7 @@ inode* initrd_mount(fs_mount* mount, inode* dev) {
         memset(name, 0, h.name_size);
         memset(file, 0, sizeof(inode_file));
 
-        if(read("/dev/ramdisk", name, h.name_size, offset) < 0) {
+        if(read(ramdisk, name, h.name_size, offset) < 0) {
             printf("Failed to read the name for file #%u", i);
             return NULL;
         }
@@ -110,12 +110,14 @@ ssize_t initrd_read(fs_mount* fs, inode* in, void* buf, uint32_t count, off_t *o
     // The only inodes created by initrd are files, atm
     if(in->type != INODE_FILE) return -1;
 
+    inode* ramdisk = node_at(get_root(), "/dev/ramdisk", strlen("/dev/ramdisk"));
+
     inode_file* file = in->resource;
     uint32_t f = (uint32_t)file->_internal;
 
     initrd_header header;
 
-    if(read("/dev/ramdisk", &header, sizeof(initrd_header), 0) < 0) {
+    if(read(ramdisk, &header, sizeof(initrd_header), 0) < 0) {
         printf("Failed to get ramdisk header!\n");
         return -1;
     }
@@ -133,12 +135,12 @@ ssize_t initrd_read(fs_mount* fs, inode* in, void* buf, uint32_t count, off_t *o
     for(int i=0;i<header.filecount;i++) {
         initrd_file_header h;
         
-        read("/dev/ramdisk", &h, sizeof(initrd_file_header), off);
+        read(ramdisk, &h, sizeof(initrd_file_header), off);
         off += sizeof(initrd_file_header) + h.name_size;
         
         if(i == f) {
             if(count > h.content_size) count = h.content_size;
-            return read("/dev/ramdisk", buf, count, off);
+            return read(ramdisk, buf, count, off);
         }
         
         off += h.content_size;

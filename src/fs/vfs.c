@@ -255,8 +255,8 @@ int create(const char* path, int flags) {
     }
 }
 
-ssize_t read(const char* path, void* buf, uint32_t count, off_t offset) {
-    inode* node = node_at(root, path, strlen((char*)path));
+ssize_t read(inode* node, void* buf, uint32_t count, off_t offset) {
+    // inode* node = node_at(root, path, strlen((char*)path));
     if(node == NULL || node->type == INODE_DIR) return -1;
 
     if(node->type == INODE_DEV) {
@@ -273,8 +273,8 @@ ssize_t read(const char* path, void* buf, uint32_t count, off_t offset) {
     return -1;
 }
 
-ssize_t write(const char *path, void* buf, uint32_t count, off_t offset) {
-    inode* node = node_at(root, path, strlen((char*)path));
+ssize_t write(inode* node, void* buf, uint32_t count, off_t offset) {
+    // inode* node = node_at(root, path, strlen((char*)path));
     if(node == NULL || node->type == INODE_DIR) return -1;
 
     if(node->type == INODE_DEV) {

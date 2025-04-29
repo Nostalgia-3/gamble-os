@@ -41,10 +41,12 @@ int mkdir(const char *path, int flags);
 int create(const char *path, int flags);
 
 // Read a file at the path specified
-ssize_t read(const char* path, void* buf, uint32_t count, off_t offset);
+ssize_t read(inode* node, void* buf, uint32_t count, off_t offset);
+// ssize_t read(const char* path, void* buf, uint32_t count, off_t offset);
 
 // Write a file at the path specified
-ssize_t write(const char *path, void* buf, uint32_t count, off_t offset);
+ssize_t write(inode* node, void* buf, uint32_t count, off_t offset);
+// ssize_t write(const char *path, void* buf, uint32_t count, off_t offset);
 
 // Send an io control signal to a device
 int ioctl(const char *path, int op, void *data);
