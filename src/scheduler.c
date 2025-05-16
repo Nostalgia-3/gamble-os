@@ -14,18 +14,16 @@
 extern process* queue[MAX_PROCESSES];
 extern uint32_t cur_process;
 
-void pqueue_init() {
-    for(int i=0;i<MAX_PROCESSES;i++) {
-        queue[i] = NULL;
-    }
-}
+static bool pqueue_started = false;
 
 void pqueue_start() {
     cur_process = 0;
+    pqueue_started = true;
     pic_enable_irq(0);
 }
 
 process* get_current_process() {
+    if(!pqueue_started) return NULL;
     return queue[cur_process];
 }
 

@@ -6,59 +6,76 @@
 typedef struct _fs_mount fs_mount;
 
 typedef struct _fs_mount {
-    const char *name;
+    const char* name;
 
-    void *internal;
+    void* internal;
+    inode* source;
+    inode* dest;
 
     inode *(*mount)(fs_mount* fs, inode* dev);
     int (*unmount)(fs_mount* fs);
     
-    int (*mkdir)(fs_mount *fs, inode* parent, const char* name, int flags);
-    int (*create)(fs_mount *fs, inode* parent, const char* name, int flags);
-    int (*delete)(fs_mount *fs, inode* in, int flags);
-    ssize_t (*read)(fs_mount *fs, inode* in, void* buf, uint32_t count, off_t* offset);
-    ssize_t (*write)(fs_mount *fs, inode* in, void* buf, uint32_t count, off_t* offset);
+    int (*mkdir)(fs_mount* fs, inode* parent, const char* name, int flags);
+    int (*create)(fs_mount* fs, inode* parent, const char* name, int flags);
+    int (*delete)(fs_mount* fs, inode* in, int flags);
+    ssize_t (*read)(fs_mount* fs, inode* in, void* buf, uint32_t count, off_t* offset);
+    ssize_t (*write)(fs_mount* fs, inode* in, void* buf, uint32_t count, off_t* offset);
 } fs_mount;
+
+typedef struct {
+    uint32_t    len;
+    uint32_t    type;
+    char        name[];
+} dirent;
+
+typedef struct {
+    
+} stat;
 
 // Initialize the virtual filesystem
 int vfs_init();
 
-int register_fs_type(fs_mount* m);
-
-inode* node_at(inode* root, const char* path, int pathlen);
-void generate_directory(inode *parent, inode *in, const char* name, uint32_t child_count);
-int add_child(inode *parent, inode *child);
-
+// Get the current root inode
 inode* get_root();
 
-// Mount a source device (or NULL, depending on the filesystem type) to
-// destination
+// Register a new filesystem type
+int register_fs_type(fs_mount* m);
+
+// Get the node at a specified path based on a root inode
+inode* node_at(inode* root, const char* path, size_t pathlen);
+
+// Update in to be a directory with a specified parent and name
+void generate_directory(inode *parent, inode *in, const char* name);
+
+// Update a parent inode to include a child inode
+int add_child(inode *parent, inode *child);
+
+// Create a node at the specified path, with a type and resource
+int mknod(const char* path, const char* name, inode_type type, void* resource);
+
+// Write to an inode to a buffer, returning the number of bytes written
+ssize_t write(inode* node, void* buf, size_t count, off_t offset);
+
+// Read an inode to a buffer, returning the number of bytes read
+ssize_t read(inode* node, void* buf, size_t count, off_t offset);
+
+// Mount a filesystem to a specified directory inode, specifying a source
+// inode and a filesystem type
 int mount(inode* source, inode* dest, const char *type);
 
-// Create a directory at the path, with flags
-int mkdir(const char *path, int flags);
-// Create a file at the path, with flags
-int create(const char *path, int flags);
+// // Create a directory at the path, with flags
+// int mkdir(const char *path, int flags);
+// // Create a file at the path, with flags
+// int create(const char *path, int flags);
 
-// Read a file at the path specified
-ssize_t read(inode* node, void* buf, uint32_t count, off_t offset);
-// ssize_t read(const char* path, void* buf, uint32_t count, off_t offset);
+// // Send an io control signal to a device
+// int ioctl(const char *path, int op, void *data);
 
-// Write a file at the path specified
-ssize_t write(inode* node, void* buf, uint32_t count, off_t offset);
-// ssize_t write(const char *path, void* buf, uint32_t count, off_t offset);
+// typedef struct {
+//     const char* name;
+//     inode_type type;
+// } dentry;
 
-// Send an io control signal to a device
-int ioctl(const char *path, int op, void *data);
-
-// Create a node at the specified path
-int mknod(const char* path, inode_type type, void *resource);
-
-typedef struct {
-    const char* name;
-    inode_type type;
-} dentry;
-
-// Get a directory entry, returning the total number of entries (0 means there
-// are no children, and entry was not written to)
-uint32_t getdents(const char* path, dentry* entry, uint32_t index);
+// // Get a directory entry, returning the total number of entries (0 means there
+// // are no children, and entry was not written to)
+// uint32_t getdents(const char* path, dentry* entry, uint32_t index);

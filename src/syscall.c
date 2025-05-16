@@ -8,9 +8,6 @@
 
 typedef int(*syscall_handler)(volatile struct scheduler_data* data, process* p);
 
-static inode* tty = NULL;
-static inode* kbd = NULL;
-
 int syscall_exit(volatile struct scheduler_data* data, process* p) {
     // TODO: actually delete processes when they're no longer running
     if(p == NULL) return -1;
@@ -19,31 +16,48 @@ int syscall_exit(volatile struct scheduler_data* data, process* p) {
 };
 
 int syscall_write(volatile struct scheduler_data* data, process* p) {
-    if(tty == NULL || kbd == NULL) {
-        tty = node_at(get_root(), "/dev/tty", sizeof("/dev/tty"));
-        kbd = node_at(get_root(), "/dev/kbd", sizeof("/dev/kbd"));
-    };
-    if(data->ebx > 1) kpanic("What are you doing?");
-    return write(data->ebx == 1 ? tty : kbd, (void*)data->ecx, data->edx, 0);
+    if(data->ebx > MAX_OPEN_FDS) {
+        kpanic("tried to access a fd that is larger than the max open fd (%u > %u=max)", data->ebx, MAX_OPEN_FDS);
+    }
+
+    if(p->open_fds[data->ebx] == NULL) {
+        kpanic("tried to access a fd that doesn't have a resource (fd = %u)", data->ebx);
+    }
+
+    return write(p->open_fds[data->ebx], (void*)data->ecx, data->edx, 0);
 };
 
 int syscall_read(volatile struct scheduler_data* data, process* p) {
-    if(tty == NULL || kbd == NULL) {
-        tty = node_at(get_root(), "/dev/tty", sizeof("/dev/tty"));
-        kbd = node_at(get_root(), "/dev/kbd", sizeof("/dev/kbd"));
-    };
-    if(data->ebx > 1) kpanic("What are you doing?");
-    return read(data->ebx == 1 ? tty : kbd, (void*)data->ecx, data->edx, 0);
+    if(data->ebx > MAX_OPEN_FDS) {
+        kpanic("tried to access a fd that is larger than the max open fd (%u > %u=max)", data->ebx, MAX_OPEN_FDS);
+    }
+
+    if(p->open_fds[data->ebx] == NULL) {
+        kpanic("tried to access a fd that doesn't have a resource (fd = %u)", data->ebx);
+    }
+
+    return read(p->open_fds[data->ebx], (void*)data->ecx, data->edx, 0);
 };
 
+#include <str.h>
+
 int syscall_open(volatile struct scheduler_data* data, process* p) {
-    printf("TODO");
-    return -1;
+    const char* path    = (const char*)data->ebx;
+    if(path == NULL) return -1;
+    int pathlen         = strlen((char*)path);
+    int id              = 0;
+
+    if(pathlen == 0) return -1;
+    
+    inode* in = node_at(get_root(), path, pathlen);
+
+    if(in == NULL) return -1;
+
+    return open_inode(p, in, &id);
 };
 
 int syscall_close(volatile struct scheduler_data* data, process* p) {
-    printf("TODO");
-    return -1;
+    return close_inode(p, data->ebx);
 };
 
 int syscall_fork(volatile struct scheduler_data* data, process* p) {
@@ -60,10 +74,51 @@ int syscall_getpid(volatile struct scheduler_data* data, process* p) {
     return -1;
 };
 
-int syscall_regdump(volatile struct scheduler_data* data, process* p) {
-    printf("TODO");
-    return 0;
-};
+int syscall_getdents(volatile struct scheduler_data* data, process* p) {
+    uint32_t fd = data->ebx;
+    dirent* dents = (dirent*)data->ecx;
+    size_t size = data->edx;
+
+    if(fd > MAX_OPEN_FDS) return -1;
+    if(p->open_fds[fd] == NULL) return -1;
+    if(dents == NULL) return -1;
+    if(size == 0) return -1;
+
+    inode* node = p->open_fds[fd];
+    uint32_t offset = 0;
+
+check_inode:
+    if(node->type != INODE_DIR) return -1;
+
+    if(node->resource.dir.is_mounted) {
+        node = node->resource.dir.mount;
+        goto check_inode;
+    }
+
+    for(int i=0;i<node->resource.dir.children_count;i++) {
+        if(node->resource.dir.children[i] == NULL) continue;
+
+        inode* child = node->resource.dir.children[i];
+
+        int namelen = strlen((char*)child->name) + 1;
+
+        if((namelen + sizeof(dirent)) + offset > size) return -1;
+
+        dents->len = namelen + sizeof(dirent);
+        dents->type = child->type;
+        memcpy(dents->name, (void*)child->name, namelen - 1);
+
+        offset += namelen + sizeof(dirent);
+        dents = (void*)((size_t)offset + (size_t)dents);
+    }
+
+    return offset;
+}
+
+int syscall_stat(volatile struct scheduler_data* data, process* p) {
+    kpanic("TODO: stat syscall");
+    return -1;
+}
 
 const syscall_handler handlers[MAX_SYSCALLS] = {
     /* 0 */ syscall_exit,
@@ -74,7 +129,8 @@ const syscall_handler handlers[MAX_SYSCALLS] = {
     /* 5 */ syscall_fork,
     /* 6 */ syscall_exec,
     /* 7 */ syscall_getpid,
-    /* 8 */ syscall_regdump
+    /* 8 */ syscall_getdents,
+    /* 9 */ syscall_stat
 };
 
 void syscall_c(volatile struct scheduler_data d) {
@@ -91,11 +147,11 @@ void syscall_c(volatile struct scheduler_data d) {
     int ret = handler(&d, get_current_process());
     
     if((ret) < 0) {
-        kpanic("An error occured while running syscall #%u", d.eax);
+        // printf_("\x1b[33mWarning\x1b[0m: An error occured while running syscall #%u\n", d.eax);
     }
     
     d.eax = ret;
-
     scheduler_tick(d);
+
     return;
 }

@@ -31,8 +31,15 @@ typedef struct {
     /* 0x40 */ uint32_t stack_size;
     /* 0x44 */ uint32_t can_run;
 
+    /* 0x48 */ inode** open_fds;
+
     // /* 36 bytes */ uint32_t eax, ebx, ecx, edx, esp, ebp, esi, edi, eip;
     // /* 12 bytes */ uint32_t cs, eflags, ss;
 } process;
 
 process*    create_process(inode* file);
+
+// id is equal to the requested id, and is set to the actual id. Returns true on success
+// and false on failure.
+int         open_inode(process* process, inode* in, int* id);
+int         close_inode(process* process, int id);

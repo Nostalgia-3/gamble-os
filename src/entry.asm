@@ -15,7 +15,7 @@ dd 0x01000000   ; data load location
 dd 0            ; data length (0 = the entire file)
 dd 0            ; bss end (0 = none)
 dd _mb_load     ; entry
-dd 1            ; video type            (text mode)
+dd 0            ; video type            (text mode)
 dd 0            ; width of framebuffer  (no preference)
 dd 0            ; height of framebuffer (no preference)
 dd 32           ; depth of framebuffer  (32 bpp)
@@ -23,7 +23,7 @@ dd 32           ; depth of framebuffer  (32 bpp)
 section .bss
 
 stack_bottom:
-    resb 65536
+    resb 131072
 stack_top:
     align 4096
 kernel_page_dir:
@@ -41,6 +41,7 @@ extern _kernel_end
 
 global kernel_page_dir
 global data_page_table
+global boot_page_table1
 global _mb_load
 
 _mb_load:
@@ -68,15 +69,12 @@ _mb_load:
     mov edx, 0x000B8003
     mov [boot_page_table1 - 0xC0000000 + 1023 * 4], edx
 
-    ; edx = page table
-    mov edx, boot_page_table1 - 0xC0000000 + 0x03
     ; identity map the kernel
-    mov [kernel_page_dir - 0xC0000000], edx
+    mov DWORD [kernel_page_dir - 0xC0000000], boot_page_table1 - 0xC0000000 + 0x03
     ; and put it at 0xC0000000
-    mov [kernel_page_dir - 0xC0000000 + 768*4], edx
+    mov DWORD [kernel_page_dir - 0xC0000000 + 768*4], boot_page_table1 - 0xC0000000 + 0x03
     ; and put the data page table immediately after
-    mov edx, data_page_table - 0xC0000000 + 0x03
-    mov [kernel_page_dir - 0xC0000000 + 769*4], edx
+    mov DWORD [kernel_page_dir - 0xC0000000 + 769*4], data_page_table - 0xC0000000 + 0x03
 
     ; set the page directory pointer
     mov ecx, kernel_page_dir - 0xC0000000

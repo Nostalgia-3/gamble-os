@@ -2,45 +2,59 @@
 
 #include <multiboot.h>
 #include <types.h>
+#include <utils.h>
 
 #define PAGE_SIZE 4096
+#define CHUNK_SIZE 128
+#define NFHEAP_SIZE 4096 * 64 // 256KiB
 
-#define PAGE_FLAG_COPY (1 << 0)
+#define ALIGN_PAGE (1 << 0) // Align the address to 4096-bytes
 
-#define PAGE_SET_ZERO (1 << 0)
-#define PAGE_READONLY (1 << 1)
+typedef union _chunk chunk;
 
-// Align the physical address of malloc
-#define MALLOC_ALIGNED_4096 (1 << 0)
-#define MALLOC_FILL_ZERO    (1 << 1)
-
-#ifndef NULL
-#define NULL 0
-#endif
-
-typedef struct {
-    uint32_t size;
-} malloc_header;
-
+// Initialize the memory manager
 void mem_init(multiboot_info_t *mbd);
 
-void *kmalloc(size_t size, uint32_t flags);
+// Returns a free physical address
+void* consume_free_page();
 
-void memset(void *ptr, int val, size_t amount);
-void memcpy(void*dest, void*src, size_t num);
+// Free a page, invalidating it and marking it as free in the page list
+void free_page(void* addr);
 
-// Allocate a page and put it at addr, returning the physical address of the
-// page
-void* alloc_page(void* addr, uint32_t flags);
+// Set a block of memory to a specified value
+void* memset(void* ptr, char val, size_t amount);
 
-// Remove the page table entry at the virtual address, flushing the tlb
-void remove_pages(void* addr, size_t count);
+// Copy a section of memory to another
+void memcpy(void* dest, void* src, size_t amount);
 
-// Reallocate pages, optionally copying all data between the previous pages and
-// the new pages. Flags are specified as PAGE_FLAG_*
-void* realloc_pages(void* start, uint32_t pagecount, uint32_t new_pagecount, uint32_t flags);
+// Returns 1 if equal, 0 if not equal, or -1 if an error occurred
+int memcmp(void* a1, void* a2, int len);
 
+// Allocate a page and put it at addr, returning the
+// physical address of the page
+void* map_pages(void* addr, size_t count, uint32_t flags);
+
+// Map a single physical page to a virtual page
+void* map_address(void* virt, void* physical, uint32_t flags);
+
+// Free a number of pages starting at address
+void free_pages(void* addr, size_t count);
+
+// Allocate a generic structure
+chunk* alloc_chunks(size_t count, int flags);
+
+// Free several chunks. Returns zero on success
+int free_chunks(chunk* addr, size_t count);
+
+// Allocate a section of memory from the no-free heap; only use for small
+// elements such as strings. This will most likely be replaced in the future
+void* allocate_nfheap(size_t count);
+
+// Returns the physical address of the current page directory
 void* get_current_pagedir();
+
+// Swap the current page directory with another; page directory is a
+// virtual address in the current page directory
 void  swap_pagedir(void* pagedir);
 
 // Get the physical address of a virtual address

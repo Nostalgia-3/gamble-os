@@ -127,34 +127,7 @@ b.addTask('initrd', 'Generate a GaOS initrd archive with the file specified by -
         b.createDirectory('build/');
     }
 
-    b.runCommand(`nasm -fbin initrd/main.asm -o initrd/init`);
-
-    const d = new DynamicData();
-    
-    const filecount = Deno.readDirSync('initrd/').filter((v)=>!v.isDirectory).toArray().length;
-
-    d.writeU32BE(0x47614F53);
-    d.writeU32LE(filecount)
-    d.writeU16LE(0x01);
-    d.writeU16LE(0x00);
-
-    for(const cf of Deno.readDirSync('initrd/')) {
-        if(cf.isDirectory) {
-            b.verbose(`initrd doesn't support directories at the moment`);
-            continue;
-        }
-
-        const n = cf.name;
-        const c = Deno.readFileSync(`initrd/${cf.name}`);
-        d.writeU32LE(n.length);
-        d.writeU32LE(c.length);
-        d.writeAsciiString(n);
-        d.writeUint8Array(c);
-    };
-    
-    Deno.writeFileSync(args.i as string, d.buffer);
-
-
+    b.runCommand(`tar cf "${args.i as string}" initrd`);
     b.verbose(`Created archive \x1b[34m${args.i}\x1b[0m`);
 
     return 0;
@@ -164,8 +137,6 @@ async function compile(args: Record<string, unknown>) {
     if(args.c) b.remove('build/');
     b.createDirectory('build/');
 
-    // if(!existsSync(args.i as string)) {
-    // }
     b.runTask('initrd', args);
 
     for(const bin of b.scanDir('build/', /\.iso$/)) {
@@ -201,8 +172,9 @@ async function compile(args: Record<string, unknown>) {
 
     if(args.x) {
         const sock = await Deno.connect({ hostname: '172.27.152.12' as string, port: 8099 });
-        b.verbose(`grub-mkrescue -o ${outFile} build/iso`);
-        await sock.write(new TextEncoder().encode(`r::grub-mkrescue -o ${outFile} build/iso`));
+        const command = `grub-mkrescue -o ${outFile} build/iso`;
+        b.verbose(command);
+        await sock.write(new TextEncoder().encode(`r::${command}`));
         await sock.read(new Uint8Array(1));
     } else {
         b.runCommand(`grub-mkrescue -o ${outFile} build/iso`);
@@ -217,9 +189,11 @@ b.addTask('compile', 'Build the kernel', (args) => {
 });
 
 b.addTask('emulate', 'Emulate the output file specified by -o/--output found in build/', (args) => {
-    const output   = (args.output as string) ?? `build/kernel-${DATE}.iso`;
+    let output      = Deno.readDirSync('build/').find((v)=>v.name.endsWith('.iso'))?.name;
 
-    if(!output[0]) {
+    if(output != undefined) output = `build/` + output;
+
+    if(!output) {
         b.fatal(`Couldn't find an image file in build/`);
     }
 
@@ -252,7 +226,7 @@ b.addTask('emulate', 'Emulate the output file specified by -o/--output found in 
         '-device usb-storage,bus=ehci.0,drive=stick',
 
         // RAM
-        `-m 1G`,
+        `-m 2G`,
 
         // Debugging
         // `-s -S`

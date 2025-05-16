@@ -19,7 +19,6 @@ struct __attribute__((packed)) scheduler_data {
     /* 0x30 */ uint32_t ss;
 };
 
-void pqueue_init();
 void pqueue_start();
 
 process* get_current_process();

@@ -3,6 +3,10 @@
 #include <printf.h>
 #include <types.h>
 
+#include <memory.h>
+#include <fs/vfs.h>
+#include <process.h>
+
 #define is_letter(c) ((((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z')) ? true : false)
 #define is_printable(c) (((c) >= 32 && (c) <= 126) ? true : false)
 #define is_digit(c) (((c) >= '0' && (c) <= '9') ? true : false)
@@ -13,3 +17,14 @@
     while(1); } while(0);
 
 void hexdump(uint8_t* addr, size_t count);
+
+void set_fb(uint32_t pitch, uint32_t width, uint32_t height);
+
+// A generic structure that is used for every struct the kernel uses
+typedef union _chunk {
+    uint8_t     size[128]; // CHUNK_SIZE
+
+    inode       inode;
+    process     process;
+    fs_mount    mount;
+} chunk;

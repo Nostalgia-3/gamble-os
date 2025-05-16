@@ -1,12 +1,13 @@
 #include <module.h>
 #include <memory.h>
 
-#define MAX_MODULES 96
+#define MAX_MODULES 128
+#define MODULE_CHUNKS 32
 
 static module **slots;
 
 int module_init() {
-    slots = kmalloc(sizeof(module*) * MAX_MODULES, 0);
+    slots = (module**)alloc_chunks(MODULE_CHUNKS, 0);
     if(slots == NULL) return -1;
     memset(slots, 0, sizeof(module*) * MAX_MODULES);
     return 0;

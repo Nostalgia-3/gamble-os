@@ -9,10 +9,11 @@ extern irq_handler
 isr_stub_%+%1:
     pusha
     push DWORD %1
+    push DWORD esp
     call exception_handler
-    add esp, 4
+    add esp, 8
     popa
-    iret
+    iretd
 %endmacro
 
 %macro m_irq_handler 1

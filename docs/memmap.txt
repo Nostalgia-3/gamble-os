@@ -5,4 +5,16 @@ Page #1 (0x00000000 - 0x00001000)
 kernel virtual memory map:
     0x00000000 - 0x00000FFF : Always maps to an invalid page
     0x00001000 - 0xBFFFFFFF : Process memory
-    0xC0000000 - 0xFFFFFFFF : Kernel memory (don't touch)
+    -----------------------
+    0xC0100000 - 0xC01FFFFF : Multiboot2 data area
+    0xC0200000 - 0xC03FEFFF : Kernel
+    0xC03FF000 - 0xC03FFFFF : VGA
+    0xC0400000 - 0xC0400FFF : Scratch page
+    0xC0401000 - 0xC0500FFF : Reserved for chunk status
+    0xC0501000 - 0xC0600FFF : Page status
+    0xC0601000 - 0xDFFFFFFF : Chunks
+    0xE0000000 - 0xFFFFFFFF : MMIO Space
+
+MMIO Space:
+    0xE0000000 - 0xE0000FFF : VGA memory
+    0xE0001000 - 0x???????? : Framebuffer

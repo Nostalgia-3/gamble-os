@@ -52,56 +52,91 @@ const char* exception_messages[] =
 
 #define EREG "\x1b[93m%08X\x1b[0m"
 
-extern void exception_handler(struct regs d) {
-    printf(
-        "\x1b[91mException #%u\x1b[0m (\x1b[92m%s\x1b[0m):\n"
-        "  EAX="EREG" EBX="EREG" ECX="EREG" EDX="EREG"\n"
-        "  ESI="EREG" EDI="EREG" EBP="EREG" ESP="EREG"\n"
-        "  EIP="EREG" EFL="EREG"  CS="EREG"  SS="EREG"\n"
-        "  USP="EREG" CR2="EREG"",
-        d.err, exception_messages[d.err],
-        d.eax, d.ebx, d.ecx, d.edx,
-        d.esi, d.edi, d.ebp, d.esp,
-        d.eip, d.eflags, d.cs, d.ss,
-        d.useresp, read_cr2()
-    );
+static uint32_t step = 0;
+#define STEP(x) (step++);
 
+extern void exception_handler(struct regs* d) {
     __asm__ volatile("cli\n");
-    while(1);
+
+    if(get_current_process() == NULL) {
+        printf_(
+            "\x1b[91mException #%u\x1b[0m (\x1b[92m%s\x1b[0m):\n"
+            " EAX="EREG" EBX="EREG" ECX="EREG" EDX="EREG"\n"
+            " ESI="EREG" EDI="EREG" EBP="EREG" ESP="EREG"\n"
+            " EIP="EREG" EFL="EREG"  CS="EREG"  SS="EREG"\n"
+            " USP="EREG" CR2="EREG" STP=\x1b[92m%u\x1b[0m\n",
+            d->err, exception_messages[d->err],
+            d->eax, d->ebx, d->ecx, d->edx,
+            d->esi, d->edi, d->ebp, d->esp,
+            d->eip, d->eflags, d->cs, d->ss,
+            d->useresp, read_cr2(), step
+        );
+
+        while(1);
+    } else {
+        printf("\nA process caused an exception! (process id = %u)", get_current_process()->pid);
+        printf_(
+            "\x1b[91mException #%u\x1b[0m (\x1b[92m%s\x1b[0m):\n"
+            " EAX="EREG" EBX="EREG" ECX="EREG" EDX="EREG"\n"
+            " ESI="EREG" EDI="EREG" EBP="EREG" ESP="EREG"\n"
+            " EIP="EREG" EFL="EREG"  CS="EREG"  SS="EREG"\n"
+            " USP="EREG" CR2="EREG" STP=\x1b[92m%u\x1b[0m\n",
+            d->err, exception_messages[d->err],
+            d->eax, d->ebx, d->ecx, d->edx,
+            d->esi, d->edi, d->ebp, d->esp,
+            d->eip, d->eflags, d->cs, d->ss,
+            d->useresp, read_cr2(), step
+        );
+        while(1);
+    }
+
+    __asm__ volatile("sti\n");
 }
 
 void irq_handler(uint32_t i) {
     module_int(i + 0x20);
 }
 
-typedef void (*func_ptr)(void);
-
 void _start(multiboot_info_t *r_mbd, unsigned int magic) {
     multiboot_info_t* mbd = ((void*)r_mbd + 0xC0000000);
 
-    idt_init();
-    mem_init(mbd);
-    gdt_init();
+    step = 0;
 
-    pqueue_init();
+    set_fb(mbd->framebuffer_pitch, mbd->framebuffer_width, mbd->framebuffer_height);
 
-    if(vfs_init() < 0) kpanic("Failed to initialize virtual filesystem");
-    if(module_init() < 0) kpanic("Failed to initialize module system");
-    if(device_init() < 0) kpanic("Failed to initialize device manager");
+    idt_init(); STEP(1);
+    mem_init(mbd); STEP(2);
+    gdt_init(); STEP(3);
+
+    if(vfs_init() < 0) kpanic("Failed to initialize virtual filesystem"); STEP(4);
+    if(module_init() < 0) kpanic("Failed to initialize module system"); STEP(5);
+    if(device_init() < 0) kpanic("Failed to initialize device manager"); STEP(6);
 
     multiboot_module_t* m = (void*)(mbd->mods_addr + 0xC0000000);
 
+    STEP(7);
     module i8042    = get_i8042_module();
-    module initrd   = get_initrd_module((void*)(m->mod_start + 0xC0000000), m->mod_end - m->mod_start);
-    module tty      = get_tty_module();
-
+    module gar      = get_ramdisk_module((void*)(m->mod_start + 0xC0000000), m->mod_end - m->mod_start);
+    module tty      = get_tty_module(mbd->framebuffer_pitch);
+    module tarfs    = get_tarfs_module();
+    STEP(8);
+    
+    STEP(9);
     module_load(&tty);
+    STEP(10);
     module_load(&i8042);
-    module_load(&initrd);
+    STEP(11);
+    module_load(&gar);
+    STEP(12);
+    module_load(&tarfs);
+    STEP(13);
 
-    if(mount(NULL, node_at(get_root(), "/initrd", sizeof("/initrd")), "initrd") < 0) {
+    STEP(14);
+    if(mount(node_at(get_root(), "/dev/ramdisk", sizeof("/dev/ramdisk")), node_at(get_root(), "/initrd", sizeof("/initrd")), "tarfs") < 0) {
         kpanic("Failed to mount initrd!");
     }
+
+    STEP(15);
 
     inode* init = node_at(get_root(), "/initrd/init", sizeof("/initrd/init"));
 
@@ -109,9 +144,13 @@ void _start(multiboot_info_t *r_mbd, unsigned int magic) {
         kpanic("/initrd/init not found!");
     }
 
+    STEP(16);
     process* p = create_process(init);
+    STEP(17);
     add_to_process_queue(p);
 
+    STEP(18);
     pqueue_start();
+    STEP(19);
     while(1);
 }

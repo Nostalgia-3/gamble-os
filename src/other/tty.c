@@ -8,28 +8,93 @@
 
 device tty;
 
-#define CHAR_WIDTH 8
-#define CHAR_HEIGHT 8
+#define FONT_WIDTH 9
+#define FONT_HEIGHT 16
+#define FONT_PADDINGRIGHT 7
 
-static uint8_t  ansi_to_text[]  = { 0x0, 0x4, 0x2, 0x6, 0x1, 0x5, 0x3, 0x7, 0x8, 0xC, 0xA, 0xE, 0x9, 0xD, 0xB, 0xF };
+void write_serial(char a) {
+    while((inb(0x3f8 + 5) & 0x20) == 0);
+    outb(0x3f8, a);
+}
+
+// static uint8_t  ansi_to_text[]  = { 0x0, 0x4, 0x2, 0x6, 0x1, 0x5, 0x3, 0x7, 0x8, 0xC, 0xA, 0xE, 0x9, 0xD, 0xB, 0xF };
 static uint16_t screen_cursor   = 0;
 static uint8_t  attributes      = 7;
 static bool     in_ansi         = false;
 static uint8_t  ansi_buf[64]    = {};
 static uint32_t ansi_index      = 0;
 
-static uint16_t line_width      = 80;
-static uint16_t line_height     = 25;
+static uint32_t framebuffer_pitch = 0;
+static uint32_t framebuffer_width = 0;
+static uint32_t framebuffer_height = 0;
 
-char ansi_to_ega_text(char attr) {
-    return (attr & (1 << 7)) | ansi_to_text[(attr >> 4) & 8] | ansi_to_text[attr & 0xF];
+static uint16_t line_width      = 0;
+static uint16_t line_height     = 0;
+
+void set_fb(uint32_t pitch, uint32_t width, uint32_t height) {
+    framebuffer_pitch = pitch;
+    framebuffer_width = width;
+    framebuffer_height = height;
+
+    line_width = framebuffer_width/FONT_WIDTH;
+    line_height = framebuffer_height/FONT_HEIGHT;
 }
+
+uint32_t get_fbpitch() {
+    return framebuffer_pitch;
+}
+
+extern unsigned char console_font_9x16[];
+
+static uint32_t ansi_to_rgb[] = {
+    // Normal
+    0x494d64,
+    0xed8796,
+    0xa6da95,
+    0xeed49f,
+    0x8aadf4,
+    0xf5bde6,
+    0x8bd5ca,
+    0xa5adcb,
+
+    // Bright
+    0x494d64,
+    0xed8796,
+    0xa6da95,
+    0xeed49f,
+    0x8aadf4,
+    0xf5bde6,
+    0x8bd5ca,
+    0xa5adcb,
+};
+
+void vga_scroll_down();
 
 void setc(uint32_t pos, char c, uint8_t attributes) {
     if(c == '\n') return;
 
-    *(char*)(0xC03FF000+pos*2)   = c;
-    *(char*)(0xC03FF000+pos*2+1) = ansi_to_ega_text(attributes);
+    size_t xpos = (pos % line_width) * FONT_WIDTH;
+    size_t ypos = (pos / line_width) * FONT_HEIGHT;
+
+    if(ypos/FONT_HEIGHT > line_height) vga_scroll_down();
+
+    // return (attr & (1 << 7)) | ansi_to_text[(attr >> 4) & 8] | ansi_to_text[attr & 0xF];
+
+    uint32_t fg = ansi_to_rgb[attributes & 0xF];
+    uint32_t bg = ansi_to_rgb[(attributes >> 4)];
+
+    for(int x=0;x<FONT_WIDTH;x++) {
+        for(int y=0;y<FONT_HEIGHT;y++) {
+            uint16_t line = (
+                (console_font_9x16[y*2 + (c) * (FONT_HEIGHT * 2)] << 8) |
+                (console_font_9x16[y*2 + (c) * (FONT_HEIGHT * 2) + 1])
+            ) >> FONT_PADDINGRIGHT;
+            *((uint32_t*)0xE0001000 + x + y*(framebuffer_pitch/sizeof(uint32_t)) + xpos + ypos*(framebuffer_pitch/sizeof(uint32_t))) = line & (1 << (FONT_WIDTH-x)) ? fg : bg;
+        }
+    }
+
+    // *(char*)(0xC03FF000+pos*2)   = c;
+    // *(char*)(0xC03FF000+pos*2+1) = ansi_to_ega_text(attributes);
 }
 
 void vga_set_cursor(uint16_t x, uint16_t y) {
@@ -42,13 +107,13 @@ void vga_set_cursor(uint16_t x, uint16_t y) {
 }
 
 void vga_scroll_down() {
-    uint32_t line_width = (80*2);
-    for(uint32_t i=0;i<25;i++) {
-        memcpy((char*)0xC03FF000+line_width*i, (char*)0xC03FF000+line_width*(i+1), line_width);
-    }
-    memset((char*)0xC03FF000+line_width*(25), 0, line_width);
+    size_t amount_to_copy = framebuffer_pitch * framebuffer_height - FONT_HEIGHT * framebuffer_pitch;
 
-    screen_cursor-=line_width-1;
+    memcpy((void*)0xE0001000, (void*)0xE0001000 + FONT_HEIGHT*framebuffer_pitch, amount_to_copy);
+    for(size_t i=0;i<FONT_HEIGHT*framebuffer_pitch/4;i++) {
+        *(uint32_t*)(0xE0001000 + amount_to_copy + i*4) = ansi_to_rgb[attributes >> 4];
+    }
+    screen_cursor -= line_width;
 }
 
 uint16_t vga_get_cursor_x() {
@@ -84,7 +149,13 @@ char* tty_strtok(char *str, char del) {
     return str_storage;
 }
 
+#define SEND_SERIAL 1
+
 void _putchar(char c) {
+#ifdef SEND_SERIAL
+    if(c == '\n') write_serial('\r');
+    write_serial(c);
+#endif
     if(in_ansi) {
         ansi_buf[ansi_index++] = c;
 
@@ -164,7 +235,7 @@ void _putchar(char c) {
         } else if(c == '\n') {
             screen_cursor += line_width - (screen_cursor % line_width);
         } else if(c == '\t') {
-            screen_cursor += CHAR_WIDTH - (screen_cursor % CHAR_WIDTH);
+            screen_cursor += line_width - (screen_cursor % line_width);
         } else if(c == '\b') {
             screen_cursor--;
             setc(screen_cursor, '\0', attributes);
@@ -172,9 +243,9 @@ void _putchar(char c) {
             // Go to the beginning of the line
             screen_cursor = screen_cursor - (screen_cursor % line_width);
         } else {
-            setc(screen_cursor, c, attributes);
             if(screen_cursor >= line_width*line_height) vga_scroll_down();
-            else screen_cursor++;
+            setc(screen_cursor, c, attributes);
+            screen_cursor++;
         }
     }
 
@@ -200,14 +271,16 @@ int tty_start(module* mod) {
         .write  = tty_write
     };
 
-    if(mknod("/dev/tty", INODE_DEV, &tty) < 0) {
+    if(mknod("/dev/", "tty", INODE_DEV, &tty) < 0) {
         printf("Failed to create /dev/tty!");
     }
 
     return 0;
 }
 
-module get_tty_module() {
+module get_tty_module(uint32_t pitch) {
+    framebuffer_pitch = pitch;
+
     return (module) {
         .name = "tty",
         .module_start = tty_start

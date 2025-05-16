@@ -11,11 +11,11 @@ typedef struct _device {
     // Called when the device is closed
     void    (*close)();
     // Called when the device is written to
-    ssize_t (*write)(const void *buf, size_t len, off_t *offset);
+    ssize_t (*write)(const void* buf, size_t len, off_t* offset);
     // Called when the device is read to
-    ssize_t (*read)(void *buf, size_t len, off_t *offset);
+    ssize_t (*read)(void* buf, size_t len, off_t* offset);
     // Called when the device is `ioctl()`-ed to
-    int     (*ioctl)(int op, void *data);
+    int     (*ioctl)(int op, void* data);
 } device;
 
 int device_init();

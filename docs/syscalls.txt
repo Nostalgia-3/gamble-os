@@ -43,3 +43,8 @@ Calling convention (ABI?):
 0x07: uint32_t getpid()
 
     Returns the process id of the current process.
+
+0x08: uint32_t getdents(uint32_t fd, void* dents, size_t size, uint32_t offset)
+
+    Reads several directory entries from a passed directory file descriptor,
+    returning the number of bytes read, or -1 if an error occurred.

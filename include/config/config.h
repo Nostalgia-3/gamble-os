@@ -17,7 +17,8 @@
 // The max number of processes the kernel supports running at once
 #define MAX_PROCESSES 256
 
-// Define modules here; a list can be found in docs/modules.txt
-
+// Determines the hard limit for the number of open file descriptors a process
+// can have open at any moment in time
+#define MAX_OPEN_FDS 128
 
 #include <config/config_done.h>
