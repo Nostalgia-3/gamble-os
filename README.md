@@ -1,6 +1,6 @@
 # GambleOS
 
-GambleOS is an i386 kernel meant for learning more about kernel development and low-level programming in C.
+GambleOS is an operating system built for Pentium III-era hardware, meant for learning more about kernel development and low-level programming in C.
 
 ## Building
 

@@ -218,45 +218,66 @@ int i8042_entry(module *dev) {
         kpanic("Failed to create keyboard device");
     }
 
-    flush_buf();
+    // Dummy reads
+    for(int i=0;i<16;i++) inb(DATA);
+
+    // Get the current controller configuration byte
+    outb(COMM, 0x20);
+    uint8_t config = inb(DATA);
+    
+    inb(DATA); // Dummy read
+
+    // Update config (disable IRQs, enable clock, disable translation)
+    printf("starting config: %02X\n", config);
+    config = 0x44;
     outb(COMM, 0x60);
-    outb(COMM, 0x41);
+    outb(DATA, config);
+
+    inb(DATA); // Dummy read
+
+    // Check for device B
+    outb(COMM, 0xA7); inb(DATA);
+    
+    outb(COMM, 0x20);
+    uint8_t device_b = inb(DATA);
+    inb(DATA);
+
+    if(device_b & (0x20)) {
+        printf("There is a second port\n");
+
+        // Disable scanning on device B
+        outb(DATA, 0xF5);
+    }
+
+    // Disable scanning on device A
+    outb(DATA, 0xF5);
+    inb(DATA);
+
+    // Check device A
+    for(int i=0;i<16;i++) inb(DATA);
+    outb(COMM, 0xAB);
+    uint8_t response = inb(DATA);
+    if(response != 0x00 && response != 0xFA) {
+        printf("Device A failed test (expected 0x00, got 0x%02X)\n", response);
+    }
+
+    for(int i=0;i<16;i++) inb(DATA);
+
+    outb(DATA, 0xFF);
+    if(inb(DATA) != 0xFA || inb(DATA) != 0xAA) {
+        printf("Device A failed to reset properly!\n");
+    }
+
+    for(int i=0;i<16;i++) inb(DATA);
+
+    // Enable device A interrupt
+    config |= 0x01;
+    outb(COMM, 0x60);
+    outb(DATA, config);
 
     if(hook_interrupt(dev, 0x21) < 0) {
         kpanic("Failed to hook to interrupt 0x21");
     }
-
-    for(int i=0;i<16;i++) inb(DATA);
-    
-    flush_buf();
-    outb(COMM, 0xAD);
-    outb(COMM, 0xA7);
-    flush_buf();
-
-    outb(COMM, 0xAA);
-    while(!(inb(STATUS) & (1 << 0)));
-    
-    uint8_t v = inb(DATA);
-    if(v != 0x55) {
-        kpanic("i8042 failed self-test (expected 0x55, got 0x%02X)", v);
-    }
-
-    flush_buf();
-    outb(COMM, 0xAB);
-    while(!(inb(STATUS) & (1 << 0)));
-    
-    v = inb(DATA);
-    if(v != 0x00) {
-        kpanic("i8042 failed port 1 test (expected 0x00, got 0x%02X)", v);
-    }
-
-    // set config
-    flush_buf();
-    outb(COMM, 0x60);
-    outb(COMM, 0x44);
-
-    flush_buf();
-    outb(COMM, 0xAE);
 
     return 0;
 }
@@ -264,6 +285,7 @@ int i8042_entry(module *dev) {
 int i8042_int(module *dev, uint32_t irq) {
     if(irq == 0x21) {
         uint8_t data = inb(DATA);
+        for(int i=0;i<16;i++) inb(DATA);
         
         if(data == 0x2A) {
             shift = true;
