@@ -188,7 +188,7 @@ b.addTask('compile', 'Build the kernel', (args) => {
     return 0;
 });
 
-b.addTask('emulate', 'Emulate the output file specified by -o/--output found in build/', (args) => {
+b.addTask('emulate', 'Emulate the output file specified by -o/--output found in build/', (_args) => {
     let output      = Deno.readDirSync('build/').find((v)=>v.name.endsWith('.iso'))?.name;
 
     if(output != undefined) output = `build/` + output;

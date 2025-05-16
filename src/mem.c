@@ -107,6 +107,7 @@ void mem_init(multiboot_info_t *mbd) {
     
     for(int i=0;i<status_pages;i++) {
         map_address((void*)0xC0501000 + i * PAGE_SIZE, (void*)(pool_start - status_pages * PAGE_SIZE + PAGE_SIZE * i), 0);
+        
     }
     
     for(int i=0;i<254;i++) {
@@ -145,12 +146,6 @@ void* memset(void* ptr, char val, size_t count) {
 
     return ptr;
 }
-
-// void memset(void* ptr, int val, size_t amount) {
-//     for(size_t i=0;i<amount;i++) {
-//         *(uint8_t*)(ptr+i) = val;
-//     }
-// }
 
 void memcpy(void* dest, void* src, size_t amount) {
     for(size_t i=0;i<amount;i++) {
@@ -211,6 +206,8 @@ void* map_address(void* virt, void* physical, uint32_t flags) {
     ((uint32_t*)SKETCH_PAGE)[pt] = (size_t) physical | 3;
     invalidate_page((size_t)virt);
 
+    memset(virt, 0, PAGE_SIZE);
+
     return virt;
 }
 
@@ -227,6 +224,8 @@ void* map_page(void* addr, uint32_t flags) {
 
     ((uint32_t*)SKETCH_PAGE)[pt] = (uint32_t) consume_free_page() | 3;
     invalidate_page((size_t)addr);
+
+    memset(addr, 0, PAGE_SIZE);
 
     return addr;
 }
