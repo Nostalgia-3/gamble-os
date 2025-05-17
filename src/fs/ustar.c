@@ -81,9 +81,39 @@ inode* tar_mount(fs_mount* mount, inode* dev) {
         uint8_t type = oct2bin(&buf.type, 1);
         uint32_t filesize = oct2bin(buf.filesize, 11);
 
+        inode* parent = root;
+
+        // This'll strip the initial "initrd/" bit of the message
         uint32_t start = 0;
         for(uint32_t i=0;i<100;i++) {
-            if(buf.name[i] == '/') start = i + 1;
+            if(buf.name[i] == '/') {
+                if(start != 0) {
+                    if(*(buf.name + start + (i - start) + 1) != 0) {
+                        int len = 0;
+                        while(*(buf.name + start + len) != '/') len++;
+                        parent = node_at(parent, (const char*) buf.name + start, len);
+                        start = i + 1;
+                    } else if(type == TAR_DIR) {
+                        if(*(buf.name + start + (i - start) + 1) != 0) {
+                            int len = 0;
+                            while(*(buf.name + start + len) != '/') len++;
+                            parent = node_at(parent, (const char*) buf.name + start, len);
+                            start = i + 1;
+                        } else {
+                            // printf_("%s\n", buf.name + start);
+                            inode* in = (inode*)alloc_chunks(1, 0);
+                            char* name = allocate_nfheap(strlen((char*)(buf.name + start)) + 1);
+                            generate_directory(parent, in, name);
+                            memcpy((void*)in->name, buf.name + start, strlen((char*)buf.name + start) - 1);
+
+                            add_child(parent, in);
+                        }
+                    }
+                } else {
+                    start = i + 1;
+                }
+            }
+
             if(buf.name[i] == '\0') break;
         }
 
@@ -100,7 +130,7 @@ inode* tar_mount(fs_mount* mount, inode* dev) {
 
             memcpy((void*)in->name, buf.name + start, strlen((char*)buf.name + start));
 
-            add_child(root, in);
+            add_child(parent, in);
         }
 
         offset += (((filesize + 511) / 512) + 1) * 512;
@@ -111,47 +141,6 @@ inode* tar_mount(fs_mount* mount, inode* dev) {
 
 ssize_t tar_read(fs_mount* fs, inode* in, void* buf, uint32_t count, off_t *offset) {
     return read(fs->source, buf, count, *offset + (uint32_t)in->resource.file._internal);
-
-    // The only inodes created by initrd are files, atm
-    // if(in->type != INODE_FILE) return -1;
-
-    // inode* ramdisk = node_at(get_root(), "/dev/ramdisk", strlen("/dev/ramdisk"));
-
-    // file_resource* file = &in->resource.file;
-    // uint32_t f = (uint32_t)file->_internal;
-
-    // initrd_header header;
-
-    // if(read(ramdisk, &header, sizeof(initrd_header), 0) < 0) {
-    //     printf("Failed to get ramdisk header!\n");
-    //     return -1;
-    // }
-
-    // if(header.magic != 0x534F6147) {
-    //     printf("initrd magic isn't correct! (expected=0x534F6147, got=0x%08X)", header.magic);
-    //     return -1;
-    // } else if(header.version != 0x01) {
-    //     printf("initrd version isn't correct! (expected=1, got=%u)", header.version);
-    //     return -1;
-    // }
-
-    // uint32_t off = sizeof(initrd_header) + header.padding;
-
-    // for(int i=0;i<header.filecount;i++) {
-    //     initrd_file_header h;
-        
-    //     read(ramdisk, &h, sizeof(initrd_file_header), off);
-    //     off += sizeof(initrd_file_header) + h.name_size;
-        
-    //     if(i == f) {
-    //         if(count > h.content_size) count = h.content_size;
-    //         return read(ramdisk, buf, count, off);
-    //     }
-        
-    //     off += h.content_size;
-    // }
-
-    // return 0;
 }
 
 int tarfs_start(module *mod) {

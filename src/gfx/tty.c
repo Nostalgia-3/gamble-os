@@ -17,7 +17,6 @@ void write_serial(char a) {
     outb(0x3f8, a);
 }
 
-// static uint8_t  ansi_to_text[]  = { 0x0, 0x4, 0x2, 0x6, 0x1, 0x5, 0x3, 0x7, 0x8, 0xC, 0xA, 0xE, 0x9, 0xD, 0xB, 0xF };
 static uint16_t screen_cursor   = 0;
 static uint8_t  attributes      = 7;
 static bool     in_ansi         = false;
@@ -46,7 +45,7 @@ uint32_t get_fbpitch() {
 
 extern unsigned char console_font_9x16[];
 
-static uint32_t ansi_to_rgb[] = {
+static uint32_t palette[] = {
     // Normal
     0x494d64,
     0xed8796,
@@ -80,8 +79,8 @@ void setc(uint32_t pos, char c, uint8_t attributes) {
 
     // return (attr & (1 << 7)) | ansi_to_text[(attr >> 4) & 8] | ansi_to_text[attr & 0xF];
 
-    uint32_t fg = ansi_to_rgb[attributes & 0xF];
-    uint32_t bg = ansi_to_rgb[(attributes >> 4)];
+    uint32_t fg = palette[attributes & 0xF];
+    uint32_t bg = palette[(attributes >> 4)];
 
     for(int x=0;x<FONT_WIDTH;x++) {
         for(int y=0;y<FONT_HEIGHT;y++) {
@@ -111,7 +110,7 @@ void vga_scroll_down() {
 
     memcpy((void*)0xE0001000, (void*)0xE0001000 + FONT_HEIGHT*framebuffer_pitch, amount_to_copy);
     for(size_t i=0;i<FONT_HEIGHT*framebuffer_pitch/4;i++) {
-        *(uint32_t*)(0xE0001000 + amount_to_copy + i*4) = ansi_to_rgb[attributes >> 4];
+        *(uint32_t*)(0xE0001000 + amount_to_copy + i*4) = palette[attributes >> 4];
     }
     screen_cursor -= line_width;
 }
@@ -264,11 +263,38 @@ ssize_t tty_write(const void* buf, size_t len, off_t *offset) {
     return 0;
 }
 
+#define TTY_CHANGE_PALETTE 0
+#define TTY_GET_SIZE 1
+
+int tty_ioctl(int op, void* data) {
+    switch(op) {
+        case TTY_CHANGE_PALETTE: {
+            if(data == NULL) return -1;
+            uint32_t* pal = (uint32_t*)data;
+
+            for(int i=0;i<16;i++) {
+                palette[i] = pal[i];
+            }
+        break; }
+    
+        case TTY_GET_SIZE: {
+            if(data == NULL) return -1;
+
+            uint32_t* size = (uint32_t*)data;
+            size[0] = line_width;
+            size[1] = line_height;
+        break; }
+    }
+
+    return 0;
+}
+
 int tty_start(module* mod) {
     tty = (device) {
         .owner  = mod,
         .read   = tty_read,
-        .write  = tty_write
+        .write  = tty_write,
+        .ioctl  = tty_ioctl,
     };
 
     if(mknod("/dev/", "tty", INODE_DEV, &tty) < 0) {

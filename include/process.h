@@ -32,12 +32,17 @@ typedef struct {
     /* 0x44 */ uint32_t can_run;
 
     /* 0x48 */ inode** open_fds;
-
-    // /* 36 bytes */ uint32_t eax, ebx, ecx, edx, esp, ebp, esi, edi, eip;
-    // /* 12 bytes */ uint32_t cs, eflags, ss;
+    /* 0x4C */ uint32_t data_start;
+    
+    /* 0x50 */ inode* source;
 } process;
 
 process*    create_process(inode* file);
+
+// Clone a process, similar to how the fork() syscall on unix works
+process*    clone_process(process* parent);
+
+int         delete_process(process* p);
 
 // id is equal to the requested id, and is set to the actual id. Returns true on success
 // and false on failure.

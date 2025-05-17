@@ -8,20 +8,29 @@
 
 #include <x86/pic.h>
 
+#include <scheduler.h>
+
 process* create_process(inode* file) {
     if(file->type != INODE_FILE)
         kpanic("Inode passed is not a file, but instead type %u", file->type);
     
     process* p = (process*) alloc_chunks(1, 0);
-    p->page_dir = (size_t**) alloc_chunks(PAGE_SIZE / CHUNK_SIZE, ALIGN_PAGE);
-
-    p->open_fds = (inode**) alloc_chunks((MAX_OPEN_FDS * sizeof(inode*)) / CHUNK_SIZE, 0);
-
     file_resource* f = &file->resource.file;
-    p->text_size = (f->filesize + PAGE_SIZE - (f->filesize % PAGE_SIZE))/PAGE_SIZE;
-    p->stack_size = STACK_SIZE;
 
-    printf_("%u, %u, %u\n", f->filesize, p->text_size, PAGE_SIZE - (f->filesize % PAGE_SIZE));
+    p->page_dir     = (size_t**) alloc_chunks(PAGE_SIZE / CHUNK_SIZE, ALIGN_PAGE);
+    p->open_fds     = (inode**) alloc_chunks((MAX_OPEN_FDS * sizeof(inode*)) / CHUNK_SIZE, 0);
+    p->text_size    = (f->filesize + PAGE_SIZE - (f->filesize % PAGE_SIZE))/PAGE_SIZE;
+    p->stack_size   = STACK_SIZE;
+    p->data_size    = 0;
+    p->eip          = 0x1000;
+    p->esp          = 0xC0000000;
+    p->cs           = 0x00000008;
+    p->eflags       = 0x10200;
+    p->can_run      = true;
+    p->data_start   = p->text_size*PAGE_SIZE + 0x1000 + PAGE_SIZE*2;
+    p->source       = file;
+
+    file->open_count++;
 
     // Copy the kernel directory pages to the processes page directory
     size_t* prev_pagedir = (size_t*)get_current_pagedir();
@@ -48,13 +57,17 @@ process* create_process(inode* file) {
     id = 1;
     open_inode(p, node_at(get_root(), "/dev/tty", sizeof("/dev/tty")), &id);
 
-    p->eip      = 0x1000;
-    p->esp      = 0xC0000000;
-    p->cs       = 0x00000008;
-    p->eflags   = 0x10200;
-    p->can_run  = true;
-
     return p;
+}
+
+int delete_process(process* p) {
+    if(p == NULL) return 0;
+    
+    if(get_current_process() == p) {
+        kpanic("Tried to delete current process? (pid = %u, addr = 0x%08x)", p->pid, p);
+    }
+
+    return 0;
 }
 
 int open_inode(process* process, inode* in, int* id) {

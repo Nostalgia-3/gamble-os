@@ -25,11 +25,19 @@ typedef struct _fs_mount {
 typedef struct {
     uint32_t    len;
     uint32_t    type;
+    size_t      size;
     char        name[];
 } dirent;
 
 typedef struct {
-    
+    // The type of the resource
+    uint32_t    type;
+    // The size of the resource
+    size_t      size;
+    // The last time the resource was modified in unix-time
+    uint64_t    mtime;
+    // The unix-time when the file was created
+    uint64_t    ctime;
 } stat;
 
 // Initialize the virtual filesystem

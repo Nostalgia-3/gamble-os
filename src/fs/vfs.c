@@ -54,14 +54,14 @@ inode *node_at(inode* root, const char* path, size_t pathlen) {
                     printf("inode is null");
                     return NULL;
                 } else if(inode->type != INODE_DIR) {
-                    printf("inode isn't a directory (addr = %08X, resource %08X)", inode->parent, inode->resource);
+                    printf("inode isn't a directory (addr = %08X, resource %08X)\n", inode->parent, inode->resource);
                     return NULL;
                 }
 
                 // inode_dir* dir = (inode_dir*)inode->resource;
 
                 if(inode->resource.dir.children_count == 0) {
-                    printf("Directory \"%s\" has no children slots!", inode->name);
+                    printf("Directory \"%s\" has no children slots!\n", inode->name);
                     return NULL;
                 }
 
@@ -86,7 +86,7 @@ inode *node_at(inode* root, const char* path, size_t pathlen) {
                 }
 
                 if(!found) {
-                    printf("Failed to find inode with name \"%s\"", cpath);
+                    printf("Failed to find inode with name \"%s\"\n", cpath);
                     return NULL;
                 }
             break;

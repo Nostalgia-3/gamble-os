@@ -114,24 +114,19 @@ void _start(multiboot_info_t *r_mbd, unsigned int magic) {
 
     multiboot_module_t* m = (void*)(mbd->mods_addr + 0xC0000000);
 
-    STEP(7);
-    module i8042    = get_i8042_module();
-    module gar      = get_ramdisk_module((void*)(m->mod_start + 0xC0000000), m->mod_end - m->mod_start);
-    module tty      = get_tty_module(mbd->framebuffer_pitch);
-    module tarfs    = get_tarfs_module();
-    STEP(8);
+    module mods[] = {
+        get_i8042_module(),
+        get_tty_module(mbd->framebuffer_pitch),
+        get_tarfs_module(),
+        get_ramdisk_module((void*)(m->mod_start + 0xC0000000), m->mod_end - m->mod_start),
+        get_framebuffer_module((void*)0xE0001000, mbd->framebuffer_height*mbd->framebuffer_pitch)
+    };
     
-    STEP(9);
-    module_load(&tty);
-    STEP(10);
-    module_load(&i8042);
-    STEP(11);
-    module_load(&gar);
-    STEP(12);
-    module_load(&tarfs);
-    STEP(13);
+    for(int i=0;i<(sizeof(mods)/sizeof(module));i++) {
+        module_load(&mods[i]);
+        STEP();
+    }
 
-    STEP(14);
     if(mount(node_at(get_root(), "/dev/ramdisk", sizeof("/dev/ramdisk")), node_at(get_root(), "/initrd", sizeof("/initrd")), "tarfs") < 0) {
         kpanic("Failed to mount initrd!");
     }

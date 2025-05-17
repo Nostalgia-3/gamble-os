@@ -127,7 +127,7 @@ b.addTask('initrd', 'Generate a GaOS initrd archive with the file specified by -
         b.createDirectory('build/');
     }
 
-    b.runCommand(`tar cf "${args.i as string}" initrd`);
+    b.runCommand(`tar cf "${args.i as string}" initrd/**`);
     b.verbose(`Created archive \x1b[34m${args.i}\x1b[0m`);
 
     return 0;
@@ -206,11 +206,8 @@ b.addTask('emulate', 'Emulate the output file specified by -o/--output found in 
     // ${output}
 
     const qemu = [
-        // Primary drive
+        // Boot drive
         `-drive file=${output},format=raw,media=disk,index=0`,
-        
-        // Secondary drive
-        `-drive if=none,file=./emulator/disk.img,format=raw,id=stick`,
 
         // AC97 audio card
         `-audio driver=sdl,model=ac97,id=speaker`,
@@ -221,17 +218,15 @@ b.addTask('emulate', 'Emulate the output file specified by -o/--output found in 
         `-net nic,model=e1000,macaddr=00:11:22:33:44:55`,
         `-net user`,
 
-        // USB stick
+        // USB
         '-device usb-ehci,id=ehci',
+
+        // USB stick
+        `-drive if=none,file=./emulator/disk.img,format=raw,id=stick`,
         '-device usb-storage,bus=ehci.0,drive=stick',
 
         // RAM
         `-m 2G`,
-
-        // Debugging
-        // `-s -S`
-        // `-d int`,
-        // `-no-reboot`
     ];
 
     b.runCommand(`qemu-system-i386 ${qemu.join(' ')} -monitor stdio`);

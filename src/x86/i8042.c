@@ -271,7 +271,7 @@ int i8042_entry(module *dev) {
     for(int i=0;i<16;i++) inb(DATA);
 
     // Enable device A interrupt
-    config |= 0x01;
+    config |= 1;
     outb(COMM, 0x60);
     outb(DATA, config);
 
@@ -285,7 +285,7 @@ int i8042_entry(module *dev) {
 int i8042_int(module *dev, uint32_t irq) {
     if(irq == 0x21) {
         uint8_t data = inb(DATA);
-        for(int i=0;i<16;i++) inb(DATA);
+        for(int i=0;i<4;i++) inb(DATA);
         
         if(data == 0x2A) {
             shift = true;

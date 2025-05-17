@@ -22,29 +22,45 @@ Calling convention (ABI?):
 
     Read from an open file descriptor, specifying a buffer with a size in bytes.
 
-0x03: uint32_t open(const char* path)
+0x03: int32_t open(const char* path)
 
     Open a file/directory specified by a zero-terminated (c-style) path string.
 
-0x04: uint32_t close(uint32_t fd)
+0x04: int32_t close(uint32_t fd)
 
     Close an open file descriptor. Returns zero on success, and one on error.
 
-0x05: uint32_t fork()
+0x05: int32_t fork()
 
     Creates a copy of the current process. Returns zero on the new process, and
     the pid of the new process on the original. 
 
-0x06: uint32_t exec(const char* path)
+0x06: int32_t exec(const char* path)
 
     Creates a new process with the executable passed by the (null-terminated)
     path string. Returns zero on success and one on failure.
 
-0x07: uint32_t getpid()
+0x07: int32_t getpid()
 
     Returns the process id of the current process.
 
-0x08: uint32_t getdents(uint32_t fd, void* dents, size_t size, uint32_t offset)
+0x08: int32_t getdents(uint32_t fd, void* dents, size_t size, uint32_t offset)
 
     Reads several directory entries from a passed directory file descriptor,
     returning the number of bytes read, or -1 if an error occurred.
+
+0x09: int32_t stat(uint32_t fd, struct stat* buf)
+
+    Get statistics such as filesize and creation/modification dates from a
+    specified file path and write it to the specified stat buf.
+
+0x0A: int32_t brk(size_t size)
+
+    Set the size of the data segment, returning the starting address of the data
+    segment if the size is non-zero, the size of the data segment if the size is
+    zero, or -1 if an error occured.
+
+0x0B: int32_t ioctl(uint32_t fd, int op, void* data)
+
+    Modify a special file, like a device, to do a device-specific operation
+    based on the op argument.
