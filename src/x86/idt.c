@@ -21,6 +21,7 @@ void idt_init() {
     // Setup PIC
     pic_move_ints(0x20, 0x28);
     for(int i=0;i<16;i++) pic_disable_irq(i);
+    pic_enable_irq(2);
 
     for(int i=0;i<32;i++) {
         // 0x8E = interrupt gate

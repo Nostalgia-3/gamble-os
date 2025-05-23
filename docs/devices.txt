@@ -8,7 +8,7 @@
 8086:24CD   82801DB/DBM (ICH4/ICH4-M) USB2 EHCI Controller
 1B36:0010   QEMU NVM Express Controller
 
-## T480
+## Thinkpad T480
 
 8086:5914   Xeon E3-1200 v6/7th Gen Core Processor Host Bridge/DRAM Registers
 8086:5917   UHD Graphics 620
@@ -26,7 +26,7 @@
 8086:15c1   JHL6240 Thunderbolt 3 USB 3.1 Controller (Low Power) [Alpine Ridge LP 2016]
 8086:f1a6   SSD Pro 7600p/760p/E 6100p Series
 
-## Netbook
+## HP Mini 1035nr
 
 8086:27ac   Mobile 945GSE Express Memory Controller Hub
 8086:27ae   Mobile 945GSE Express Integrated Graphics Controller
@@ -37,3 +37,20 @@
 8086:27b9   82801GBM (ICH7-M) LPC Interface Bridge
 14e4:4315   BCM4312 802.11b/g LP-PHY
 11ab:4354   88E8040 PCI-E Fast Ethernet Controller
+
+## 2010 Aspire (?)
+
+8086:0044   Core Processor DRAM Controller
+8086:0046   Core Processor Integrated Graphics Controller
+8086:3b64   5 Series/3400 Series Chipset HECI Controller
+8086:3b3c   5 Series/3400 Series Chipset USB2 Enhanced Host Controller
+8086:3b56   5 Series/3400 Series Chipset High Definition Audio
+8086:3b42   5 Series/3400 Series Chipset PCI Express Root Port 1
+8086:3b34   5 Series/3400 Series Chipset USB2 Enhanced Host Controller
+8086:2448   82801 Mobile PCI Bridge
+8086:3b09   HM55 Chipset LPC Interface Controller
+8086:2c62   Core Processor QuickPath Architecture Generic Non-core Registers
+8086:2d10   Core Processor QPI Link 0
+14e4:1692   NetLink BCM57780 Gigabit Ethernet PCIe
+168c:002e   AR9287 Wireless Network Adapter (PCI-Express)
+

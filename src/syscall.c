@@ -188,6 +188,18 @@ int syscall_ioctl(volatile struct scheduler_data* data, process* p) {
     return node->resource.dev->ioctl(data->ecx, (void*)data->edx);
 }
 
+int syscall_pwd(volatile struct scheduler_data* data, process* p) {
+    // void* buf   = (void*)data->ebx;
+    size_t len  = (size_t)data->ecx;
+
+    if(len < strlen(p->cwd) + 1) {
+        printf_("buffer too small for working directory!\n");
+        return -1;
+    }
+
+    return 0;
+}
+
 const syscall_handler handlers[MAX_SYSCALLS] = {
     /*  0 */ syscall_exit,
     /*  1 */ syscall_write,
@@ -200,7 +212,8 @@ const syscall_handler handlers[MAX_SYSCALLS] = {
     /*  8 */ syscall_getdents,
     /*  9 */ syscall_stat,
     /* 10 */ syscall_brk,
-    /* 11 */ syscall_ioctl
+    /* 11 */ syscall_ioctl,
+    /* 12 */ syscall_pwd
 };
 
 void syscall_c(volatile struct scheduler_data d) {

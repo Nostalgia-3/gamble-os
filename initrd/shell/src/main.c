@@ -63,6 +63,28 @@ int strcmp(char *s1, char *s2) {
     return 0;
 }
 
+uint32_t hatoi(char*st) {
+    uint32_t val = 0;
+    char c;
+ 
+    while ((c = *st++)) {
+        if(c >= '0' && c <= '9') {
+            val *= 16;
+            val += (uint32_t)(c - '0');
+        } else if((c >= 'a' && c <= 'f')) {
+            val *= 16;
+            val += c-'a'+10;
+        } else if((c >= 'A' && c <= 'F')) {
+            val *= 16;
+            val += c-'A'+10;
+        } else {
+            // non-hex character here
+            return val;
+        }
+    }
+    return val;
+}
+
 const char* get_entry_style(inode_type x) {
     switch(x) {
         case INODE_FILE: return "\x1b[32m"; break;
@@ -80,10 +102,13 @@ void run_command(char* cmdbfr) {
     } else if(strcmp("help", ex) == 0) {
         printf(
             "Commands:\n"
-            "  \x1b[93mcls/clear\x1b[90m                    \x1b[0mclears the terminal\n"
-            "  \x1b[93mls <dir>\x1b[90m                     \x1b[0mlist contents of a directory\n"
-            "  \x1b[93mcat <path>\x1b[90m                   \x1b[0moutput the contents of path to stdout\n"
-            "  \x1b[93mpal <path>\x1b[90m                   \x1b[0mupdate palette to a palette file in initrd\n"
+            "  \x1b[93mcls/clear                            \x1b[0mclears the terminal\n"
+            "  \x1b[93mls <dir>                             \x1b[0mlist contents of a directory\n"
+            "  \x1b[93mcat <path>                           \x1b[0moutput the contents of path to stdout\n"
+            "  \x1b[93mpal <path>                           \x1b[0mupdate palette to a palette file in initrd\n"
+            "  \x1b[93mfetch                                \x1b[0mfetch information about the system\n"
+            "  \x1b[93mwrite <addr> <val>                   \x1b[0mwrite a u32 to an arbitrary address\n"
+            "  \x1b[93mread <addr>                          \x1b[0mread a u32 from an arbitrary address\n"
             // "  \x1b[93mmount\x1b[90m    <drive> <st:path>   \x1b[0mMount a device\n"
             // "  \x1b[93mmalloc\x1b[90m   <size>              \x1b[0mAllocate memory and output the address\n"
             // "  \x1b[93mhreset\x1b[90m                       \x1b[0mHard restart\n"
@@ -181,13 +206,31 @@ void run_command(char* cmdbfr) {
         if(ioctl((uint32_t)tty, TTY_CHANGE_PALETTE, buf) < 0) {
             printf("Failed to update palette!\n");
         }
+    } else if(strcmp("fetch", ex) == 0) {
+        printf_("todo\n");
+    } else if(strcmp("write", ex) == 0) {
+        ex = strtok(NULL, ' ');
+        uint32_t addr = hatoi(ex);
+        ex = strtok(NULL, ' ');
+        uint32_t val = hatoi(ex);
+
+        printf_("writing 0x%08x to 0x%08x\n", addr, val);
+
+        *(uint32_t*)(addr) = val;
+    } else if(strcmp("read", ex) == 0) {
+        ex = strtok(NULL, ' ');
+        uint32_t addr = hatoi(ex);
+
+        printf_("read from 0x%08x\n", addr);
+
+        printf_("%08x\n", *(uint32_t*)(addr));
     } else {
         printf("Unknown command: %s\n", ex);
     }
 }
 
 int main() {
-    const char* prompt      = "\x1b[94mShell\x1b[0m> ";
+    const char* prompt      = "\x1b[96m>\x1b[0m ";
     char        buffer[32]  = {0};
     bool        running     = true;
     char        cmdbfr[80]  = {0};
@@ -249,11 +292,27 @@ int main() {
 
         if(running) {
             // Fancy command highlighting
-            char *comr = strtok(cmdbfr, ' ');
-            char command[80] = {0};
-            for(int i=0;i<sizeof(command);i++) command[i] = '\0';
-            for(int i=0;i<strlen(comr);i++) command[i] = comr[i];
-            printf("\x1b[2K\r%s\x1b[93m%s\x1b[0m%s", prompt, command, cmdbfr+strlen(comr));
+            printf("\x1b[2K\r%s\x1b[93m", prompt);
+
+            int state = 0;
+
+            for(int i=0;i<index;i++) {
+                if(cmdbfr[i] == ' ') {
+                    switch(state) {
+                        case 0: state = 1; printf_("\x1b[0m"); break;
+                        case 2: state = 1; printf_("\x1b[0m"); break;
+                    }
+                }
+
+                if(i != 0 && state == 1 && cmdbfr[i-1] == ' ' && cmdbfr[i] == '-') {
+                    state = 2;
+                    printf_("\x1b[92m");
+                }
+
+                write(STDOUT, &cmdbfr[i], 1);
+            }
+
+            printf_("\x1b[0m");
         }
     }
     

@@ -35,6 +35,7 @@ void pic_disable_irq(uint8_t line) {
     outb(port, inb(port) | (1 << line));
 }
 
+#include <printf.h>
 void pic_enable_irq(uint8_t line) {
     uint16_t port = PIC1_DATA;
 
@@ -43,5 +44,5 @@ void pic_enable_irq(uint8_t line) {
         line -= 8;
     }
 
-    outb(port, inb(port) & ~(1 << line));        
+    outb(port, inb(port) & ~(1 << line));
 }

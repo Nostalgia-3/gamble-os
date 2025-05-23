@@ -54,7 +54,7 @@ inode* tar_mount(fs_mount* mount, inode* dev) {
         return NULL;
     }
 
-    printf_("mounting device \"%s\" as tar\n", dev->name);
+    // printf_("mounting device \"%s\" as tar\n", dev->name);
 
     tarnode buf;
     off_t offset = 0;

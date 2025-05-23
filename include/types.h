@@ -27,3 +27,5 @@ typedef __UINTPTR_TYPE__    uintptr_t;
 #define false   0
 
 typedef uint8_t             bool;
+
+typedef struct _module      module;

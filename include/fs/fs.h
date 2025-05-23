@@ -39,6 +39,8 @@ typedef struct _inode {
     inode_type type;
 
     // A value that determines the number of times this file is open
+    // TODO: change this to a dynamic array pointing to resources that have this
+    // inode open
     size_t open_count;
 
     union {

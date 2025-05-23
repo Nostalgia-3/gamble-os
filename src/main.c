@@ -55,9 +55,7 @@ const char* exception_messages[] =
 static uint32_t step = 0;
 #define STEP(x) (step++);
 
-extern void exception_handler(struct regs* d) {
-    __asm__ volatile("cli\n");
-
+extern void exception_handler(const struct regs* d) {
     if(get_current_process() == NULL) {
         printf_(
             "\x1b[91mException #%u\x1b[0m (\x1b[92m%s\x1b[0m):\n"
@@ -71,7 +69,6 @@ extern void exception_handler(struct regs* d) {
             d->eip, d->eflags, d->cs, d->ss,
             d->useresp, read_cr2(), step
         );
-
         while(1);
     } else {
         printf("\nA process caused an exception! (process id = %u)", get_current_process()->pid);
@@ -89,20 +86,16 @@ extern void exception_handler(struct regs* d) {
         );
         while(1);
     }
-
-    __asm__ volatile("sti\n");
 }
 
-void irq_handler(uint32_t i) {
+void irq_handler(const uint32_t i) {
     module_int(i + 0x20);
 }
 
 void _start(multiboot_info_t *r_mbd, unsigned int magic) {
     multiboot_info_t* mbd = ((void*)r_mbd + 0xC0000000);
-
+    
     step = 0;
-
-    set_fb(mbd->framebuffer_pitch, mbd->framebuffer_width, mbd->framebuffer_height);
 
     idt_init(); STEP(1);
     mem_init(mbd); STEP(2);
@@ -119,12 +112,19 @@ void _start(multiboot_info_t *r_mbd, unsigned int magic) {
         get_tty_module(mbd->framebuffer_pitch),
         get_tarfs_module(),
         get_ramdisk_module((void*)(m->mod_start + 0xC0000000), m->mod_end - m->mod_start),
-        get_framebuffer_module((void*)0xE0001000, mbd->framebuffer_height*mbd->framebuffer_pitch)
+        get_framebuffer_module((void*)0xE0001000, mbd->framebuffer_height*mbd->framebuffer_pitch),
+        
+        // blk
+        get_ata_module(),
+
+        // net
+        get_rtl8139_module(),
+        get_bcm4312_module(),
+        get_ar9287_module()
     };
     
     for(int i=0;i<(sizeof(mods)/sizeof(module));i++) {
         module_load(&mods[i]);
-        STEP();
     }
 
     if(mount(node_at(get_root(), "/dev/ramdisk", sizeof("/dev/ramdisk")), node_at(get_root(), "/initrd", sizeof("/initrd")), "tarfs") < 0) {

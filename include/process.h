@@ -35,11 +35,12 @@ typedef struct {
     /* 0x4C */ uint32_t data_start;
     
     /* 0x50 */ inode* source;
+    /* 0x54 */ char* cwd;
 } process;
 
 process*    create_process(inode* file);
 
-// Clone a process, similar to how the fork() syscall on unix works
+// Clone a process, creating an exact duplicate of the parent process with seperate memory
 process*    clone_process(process* parent);
 
 int         delete_process(process* p);

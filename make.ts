@@ -215,8 +215,9 @@ b.addTask('emulate', 'Emulate the output file specified by -o/--output found in 
         `-machine pcspk-audiodev=speaker`,
 
         // E1000 network card
-        `-net nic,model=e1000,macaddr=00:11:22:33:44:55`,
-        `-net user`,
+        `-netdev user,id=u1,hostfwd=tcp::5555-:22`,
+        `-device rtl8139,netdev=u1`,
+        `-object filter-dump,id=f1,netdev=u1,file=emulator/netdump.dat`,
 
         // USB
         '-device usb-ehci,id=ehci',

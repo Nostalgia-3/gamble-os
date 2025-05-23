@@ -8,6 +8,8 @@
 #define CHUNK_SIZE 128
 #define NFHEAP_SIZE 4096 * 64 // 256KiB
 
+#define CONTINUOUS (1 << 1) // Allocate pages in a continuous chunk of memory
+
 #define ALIGN_PAGE (1 << 0) // Align the address to 4096-bytes
 
 typedef union _chunk chunk;
@@ -36,6 +38,12 @@ void* map_pages(void* addr, size_t count, uint32_t flags);
 
 // Map a single physical page to a virtual page
 void* map_address(void* virt, void* physical, uint32_t flags);
+
+// Map a physical address to I/O space
+void* map_io(void* addr, size_t pagecount, uint32_t flags);
+
+// Copy a page from a physical source address to a virtual destination address
+int copy_page(uint32_t** pdir, void* virt_source, void* virt_dest);
 
 // Free a number of pages starting at address
 void free_pages(void* addr, size_t count);

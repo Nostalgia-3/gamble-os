@@ -15,9 +15,9 @@ dd 0x01000000   ; data load location
 dd 0            ; data length (0 = the entire file)
 dd 0            ; bss end (0 = none)
 dd _mb_load     ; entry
-dd 0            ; video type            (text mode)
-dd 0            ; width of framebuffer  (no preference)
-dd 0            ; height of framebuffer (no preference)
+dd 0            ; video type            (video mode)
+dd 800          ; width of framebuffer  (prefer 800px)
+dd 600          ; height of framebuffer (prefer 600px)
 dd 32           ; depth of framebuffer  (32 bpp)
 
 section .bss

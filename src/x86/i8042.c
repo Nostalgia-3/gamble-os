@@ -228,7 +228,7 @@ int i8042_entry(module *dev) {
     inb(DATA); // Dummy read
 
     // Update config (disable IRQs, enable clock, disable translation)
-    printf("starting config: %02X\n", config);
+    // printf("starting config: %02X\n", config);
     config = 0x44;
     outb(COMM, 0x60);
     outb(DATA, config);
@@ -243,7 +243,7 @@ int i8042_entry(module *dev) {
     inb(DATA);
 
     if(device_b & (0x20)) {
-        printf("There is a second port\n");
+        // printf("There is a second port\n");
 
         // Disable scanning on device B
         outb(DATA, 0xF5);
@@ -306,6 +306,8 @@ module get_i8042_module() {
     return (module) {
         .name = "i8042",
         .module_start = i8042_entry,
-        .module_int = i8042_int
+        .module_int = i8042_int,
+        
+        .type = 0
     };
 }

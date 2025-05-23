@@ -64,3 +64,19 @@ Calling convention (ABI?):
 
     Modify a special file, like a device, to do a device-specific operation
     based on the op argument.
+
+0x0C: int32_t pwd(void* buf, size_t len)
+
+    Write the current working directory (as a null-terminated string) of the
+    process into the buffer. If the length is too small, -1 is returned,
+    otherwise 0 is returned.
+
+0x0D: int32_t socket(int protocol, int flags)
+
+    Open a socket file descriptor, which acts like an endpoint for data transfer
+    through a network (or local communication). Further configuration is done
+    using the connect() and bind() syscalls.
+
+0x0E: int32_t connect(uint32_t fd, void* connbuff, size_t len)
+
+    Connect to a network based on the protocol of the socket

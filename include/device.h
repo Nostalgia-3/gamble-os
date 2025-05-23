@@ -1,7 +1,10 @@
 #pragma once
 
-#include <types.h>
+#include <pci.h>
+#include <usb.h>
+#include <net/net.h>
 #include <module.h>
+#include <types.h>
 
 typedef struct _device {
     module *owner;
@@ -18,4 +21,26 @@ typedef struct _device {
     int     (*ioctl)(int op, void* data);
 } device;
 
+#define DEVICE_UNUSED   0
+#define DEVICE_PCI      1
+#define DEVICE_USB      2
+#define DEVICE_NIC      3
+
+typedef struct _usb_device {
+    module* owner;
+} usb_device;
+
+typedef struct _dev_entry {
+    uint32_t type;
+
+    union {
+        pci_device pci;
+        usb_device usb;
+        nic_device nic;
+    };
+} dev_entry;
+
+int find_pci_device(pci_requirements* req);
+
+int register_device(dev_entry dev);
 int device_init();

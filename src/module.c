@@ -14,6 +14,8 @@ int module_init() {
 }
 
 int module_load(module* mod) {
+    if(mod->type == MODULE_PCI && find_pci_device(&mod->requirements.pci) < 0) return 0;
+
     for(int i=0;i<MAX_MODULES;i++) {
         if(slots[i] == NULL) {
             slots[i] = mod;
@@ -24,7 +26,7 @@ int module_load(module* mod) {
         }
     }
 
-    return 0;
+    return -1;
 }
 
 int module_int(uint32_t inter) {

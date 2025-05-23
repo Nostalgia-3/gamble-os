@@ -114,19 +114,21 @@ void mem_init(multiboot_info_t *mbd) {
         kernel_page_dir[770 + i] = (uint32_t)consume_free_page() | 3;
     }
     
+    void* fb = map_io(
+        (void*)(uint32_t)mbd->framebuffer_addr,
+        (mbd->framebuffer_pitch*mbd->framebuffer_height + PAGE_SIZE) / 4096,
+        0
+    );
+
     // Find a better place to setup the framebuffer
-    for(int i=0;i<(mbd->framebuffer_pitch*mbd->framebuffer_height + PAGE_SIZE) / 4096;i++) {
-        map_address((void*)0xE0001000 + i*PAGE_SIZE, (void*)((size_t)mbd->framebuffer_addr + i*PAGE_SIZE), 0);
-    }
+    set_fb(
+        mbd->framebuffer_pitch, mbd->framebuffer_width, mbd->framebuffer_height,
+        fb
+    );
 
     for(size_t i=0;i<mbd->framebuffer_height * (mbd->framebuffer_pitch/sizeof(uint32_t));i++) {
-        *((uint32_t*)0xE0001000 + i) = 0x494d64;
+        *((uint32_t*)fb + i) = 0x494d64;
     }
-
-    printf_("fb: %ux%u, bpp: %u, pitch: %u\n", mbd->framebuffer_width, mbd->framebuffer_height, mbd->framebuffer_bpp, mbd->framebuffer_pitch);
-
-    printf_("Kernel size: %08X\n", get_kernel_size());
-    printf_("Memory pool: start = %08X, len = %08X\n", pool_start, pool_len);
 
     if(!map_pages((void*)0xC0401000, 256, 0))
         kpanic("Failed to allocate pages for Chunk Status Buffer");
@@ -332,4 +334,35 @@ void* allocate_nfheap(size_t count) {
     nfheap_off += count;
 
     return addr;
+}
+
+static void* ioaddr = (void*)0xE0001000;
+
+void* map_io(void* addr, size_t pagecount, uint32_t flags) {
+    void* r = ioaddr;
+
+    for(int i=0;i<pagecount;i++) {
+        map_address((void*)ioaddr, (void*)((size_t)addr + i*PAGE_SIZE), 0);
+        ioaddr += PAGE_SIZE;
+    }
+
+    return r;
+}
+
+int copy_page(uint32_t** pdir, void* virt_source, void* virt_dest) {
+    size_t source = (size_t)virt_source;
+
+    size_t pd = ((size_t)source >> 22) & 0x3FF;
+    size_t pt = ((size_t)source >> 12) & 0x3FF;
+
+    data_page_table[0] = (uint32_t)pdir[pd][pt] | 3;
+    invalidate_page(SKETCH_PAGE);
+
+    uint32_t* src = (uint32_t*)SKETCH_PAGE;
+
+    for(int i=0;i<PAGE_SIZE/sizeof(uint32_t);i++) {
+        ((uint32_t*)virt_dest)[i] = src[i];
+    }
+
+    return 0;
 }

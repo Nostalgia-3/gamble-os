@@ -26,14 +26,16 @@ static uint32_t ansi_index      = 0;
 static uint32_t framebuffer_pitch = 0;
 static uint32_t framebuffer_width = 0;
 static uint32_t framebuffer_height = 0;
+static uint32_t* framebuffer_addr   = NULL;
 
 static uint16_t line_width      = 0;
 static uint16_t line_height     = 0;
 
-void set_fb(uint32_t pitch, uint32_t width, uint32_t height) {
+void set_fb(uint32_t pitch, uint32_t width, uint32_t height, void* addr) {
     framebuffer_pitch = pitch;
     framebuffer_width = width;
     framebuffer_height = height;
+    framebuffer_addr = addr;
 
     line_width = framebuffer_width/FONT_WIDTH;
     line_height = framebuffer_height/FONT_HEIGHT;
@@ -76,8 +78,6 @@ void setc(uint32_t pos, char c, uint8_t attributes) {
     size_t ypos = (pos / line_width) * FONT_HEIGHT;
 
     if(ypos/FONT_HEIGHT > line_height) vga_scroll_down();
-
-    // return (attr & (1 << 7)) | ansi_to_text[(attr >> 4) & 8] | ansi_to_text[attr & 0xF];
 
     uint32_t fg = palette[attributes & 0xF];
     uint32_t bg = palette[(attributes >> 4)];
